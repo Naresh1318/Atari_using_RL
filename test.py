@@ -25,10 +25,10 @@ model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
 # Parameters
 D = deque()                                # Register where the actions will be stored
 
-observetime = 1000                         # Number of timesteps we will be acting on the game and observing results
+observetime = 500                         # Number of timesteps we will be acting on the game and observing results
 epsilon = 0.7                              # Probability of doing a random move
 gamma = 0.9                                # Discounted future reward. How much we care about steps further in time
-mb_size = 100                               # Learning minibatch size
+mb_size = 50                              # Learning minibatch size
 n_epoches = 500
 
 train = False
@@ -58,7 +58,6 @@ if train:
                 env.reset()           # Restart game if it's finished
                 obs = np.expand_dims(observation, axis=0)     # (Formatting issues) Making the observation the first element of a batch of inputs
                 state = np.stack((obs, obs), axis=1)
-                break
         # print('Observing Finished')
 
         # SECOND STEP: Learning from the observations (Experience replay)
@@ -93,7 +92,7 @@ if train:
         print("Epoch: {}/{}".format(e+1, n_epoches))
     print('Learning Finished')
     print("Time Taken for {} epoches: {:.4f}".format(n_epoches, time.time()-t1))
-    model.save(filepath='./Cart_Pole_saved_model_2')
+    model.save(filepath='./Cart_Pole_saved_model_3')
 
 
 # THIRD STEP: Play!
@@ -101,8 +100,8 @@ observation = env.reset()
 obs = np.expand_dims(observation, axis=0)
 state = np.stack((obs, obs), axis=1)
 done = False
-n_plays = 20
-model.load_weights(filepath='./Cart_Pole_saved_model_1')
+n_plays = 100
+model.load_weights(filepath='./Cart_Pole_saved_model_3')
 best_scores = []
 for p in range(n_plays):
     observation = env.reset()
@@ -120,3 +119,4 @@ for p in range(n_plays):
     best_scores.append(tot_reward)
     print('Game ended! Total reward: {}'.format(tot_reward))
 print("Best result: {}".format(np.max(best_scores)))
+print("Average Reward: {}".format(np.mean(best_scores)))
