@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import gym
 import time
+import datetime
 import random
 from collections import deque
 import mission_control as mc
@@ -64,6 +65,7 @@ def train(train_model=True):
     # Create the summary for tensorboard
     tf.summary.scalar(name='loss', tensor=loss)
     summary_op = tf.summary.merge_all()
+    saver = tf.train.Saver()
     init = tf.global_variables_initializer()
     print("Training agent!")
     print("Tensorboard files stores in: {}".format(mc.logdir))
@@ -94,17 +96,24 @@ def train(train_model=True):
                         target[0][action] = reward + mc.gamma*(np.amax(agent_output))
                     agent_target.append(target[0])
 
-                # Training the agent. Finally!!
-                _, l, summary = sess.run([optimizer, loss, summary_op],
+                # Training the agent for 10 iterations. Finally!!
+                for i in range(10):
+                    sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
+                l, summary = sess.run([loss, summary_op],
                                             feed_dict={X_input: agent_input, Y_target: agent_target})
                 writer.add_summary(summary)
-                print("Batch: {}/{}".format(b+1, mc.batch_size))
+                print("Batch: {}/{}".format(b+1, int(len(observations)/mc.batch_size)))
                 print("Loss: {:.4f}".format(l))
+        # Save the agent
+        saved_path = saver.save(sess, mc.logdir + '/model_{}'.format(datetime.datetime.now()))
         print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
         print("Average time for each epoch: {:.4f}s".format((time.time() - t1)/mc.n_epochs))
         print("Tensorboard files saved in: {}".format(mc.logdir))
+        print("Model saved in: {}".format(saved_path))
         print("Agent get to roll!")
 
+        # TODO: Get user input for either play or exit session after training and saving the model
+        # TODO: Make the agent play the game
 
 if __name__ == '__main__':
     train(train_model=True)
