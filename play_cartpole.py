@@ -34,13 +34,13 @@ def collect_observations(sess, agent):
     state = np.append(observation, observation, 1)
     for i in range(mc.observation_time):
         if np.random.rand() < mc.prob_random:
-            action = np.random.randint(low=0, high=env.action_space.n+1)
+            action = np.random.randint(low=0, high=env.action_space.n)
         else:
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
         next_state, reward, done, _ = env.step(action)
         next_state = np.expand_dims(next_state, axis=0)
         # TODO: Interchange next and previous states to check changes
-        next_states = np.append(next_state, state[0][4:], axis=0)
+        next_states = np.expand_dims(np.append(next_state, state[0][4:]), axis=0)
         replay_memory.append((state, action, reward, next_states, done))
         state = next_states
         if done:
@@ -50,10 +50,14 @@ def collect_observations(sess, agent):
     return replay_memory
 
 
+def make_directories(main_dir):
+    pass
+
+
 def train(train_model=True):
     agent = get_agent(X_input)
 
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=agent, labels=Y_target))
+    loss = tf.reduce_mean(tf.square(agent - Y_target))
 
     optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
 
@@ -67,8 +71,8 @@ def train(train_model=True):
         sess.run(init)
         writer = tf.summary.FileWriter(logdir=mc.logdir, graph=sess.graph)
         t1 = time.time()
-        for e in range(mc.n_epoches):
-            print("-----------------------------Epoch: {}/{}--------------------------------".format(e+1, mc.n_epoches))
+        for e in range(mc.n_epochs):
+            print("-----------------------------Epoch: {}/{}--------------------------------".format(e + 1, mc.n_epochs))
             observations = collect_observations(sess, agent)
             for b in range(int(len(observations)/mc.batch_size)):
                 mini_batch = random.sample(observations, mc.batch_size)
@@ -81,14 +85,14 @@ def train(train_model=True):
                     next_state = mini_batch[s][3]
                     done = mini_batch[s][4]
 
-                    agent_input.append(state)
+                    agent_input.append(state[0])
                     target = sess.run(agent, feed_dict={X_input: state})
                     if done:
-                        target[action] = reward
+                        target[0][action] = reward
                     else:
                         agent_output = sess.run(agent, feed_dict={X_input: next_state})
-                        target[action] = reward + mc.gamma*(np.amax(agent_output))
-                    agent_target.append(target)
+                        target[0][action] = reward + mc.gamma*(np.amax(agent_output))
+                    agent_target.append(target[0])
 
                 # Training the agent. Finally!!
                 _, l, summary = sess.run([optimizer, loss, summary_op],
@@ -96,8 +100,11 @@ def train(train_model=True):
                 writer.add_summary(summary)
                 print("Batch: {}/{}".format(b+1, mc.batch_size))
                 print("Loss: {:.4f}".format(l))
-        print("Time taken your potato: {.4f}".format(time.time()-t1))
+        print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
+        print("Average time for each epoch: {:.4f}s".format((time.time() - t1)/mc.n_epochs))
         print("Tensorboard files saved in: {}".format(mc.logdir))
         print("Agent get to roll!")
 
 
+if __name__ == '__main__':
+    train(train_model=True)
