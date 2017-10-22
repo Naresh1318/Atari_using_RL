@@ -75,6 +75,7 @@ def play(sess, agent, no_plays):
         print("Game: {}/{}".format(p+1, no_plays))
         print("Reward: {}".format(reward))
     print("------------------------------------------------------------------------------------------------------")
+    print("Best reward: {}".format(np.amax(rewards)))
     print("Average reward: {}".format(np.mean(rewards)))
 
 
@@ -132,14 +133,14 @@ def train(train_model=True):
                     print("Batch: {}/{}".format(b+1, int(len(observations)/mc.batch_size)))
                     print("Loss: {:.4f}".format(l))
                     step += 1
-                # Save the agent
-                saved_path = saver.save(sess, mc.logdir + '/model_{}'.format(datetime.datetime.now()))
-                print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
-                print("Average time for each epoch: {:.4f}s".format((time.time() - t1)/mc.n_epochs))
-                print("Tensorboard files saved in: {}".format(mc.logdir))
-                print("Model saved in: {}".format(saved_path))
-                print("Agent get to roll!")
-                # TODO: Get user input for either play or exit session after training and saving the model
+            # Save the agent
+            saved_path = saver.save(sess, mc.logdir + '/model_{}'.format(datetime.datetime.now()))
+            print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
+            print("Average time for each epoch: {:.4f}s".format((time.time() - t1)/mc.n_epochs))
+            print("Tensorboard files saved in: {}".format(mc.logdir))
+            print("Model saved in: {}".format(saved_path))
+            print("Agent get to roll!")
+            # TODO: Get user input for either play or exit session after training and saving the model
         else:
             # TODO: Make the agent play the game
             saver.restore(sess, tf.train.latest_checkpoint(mc.logdir))
