@@ -41,7 +41,7 @@ def collect_observations(sess, agent, prob_rand):
         next_state, reward, done, _ = env.step(action)
         next_state = np.expand_dims(next_state, axis=0)
         # TODO: Interchange next and previous states to check changes
-        next_states = np.expand_dims(np.append(next_state, state[0][4:]), axis=0)
+        next_states = np.expand_dims(np.append(next_state, state[0][:4]), axis=0)
         replay_memory.append((state, action, reward, next_states, done))
         state = next_states
         if done:
@@ -69,7 +69,7 @@ def play(sess, agent, no_plays):
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
             new_state, r, done, _ = env.step(action)
             new_state = np.expand_dims(new_state, axis=0)
-            state = np.expand_dims(np.append(new_state, state[0][4:]), axis=0)
+            state = np.expand_dims(np.append(new_state, state[0][:4]), axis=0)
             reward += r
         rewards.append(reward)
         print("Game: {}/{}".format(p+1, no_plays))
