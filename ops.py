@@ -1,7 +1,6 @@
 import tensorflow as tf
 
 
-# Dense
 def dense(x, n1, n2, name):
     with tf.variable_scope(name):
         weights = tf.get_variable('weights', shape=[n1, n2], dtype=tf.float32,

@@ -12,7 +12,7 @@ import ops
 env = gym.make('CartPole-v0')
 
 # Placeholders
-# TODO: make the shape of X_input generatized
+# TODO: make the shape of X_input generalized
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 8], name='Observations')
 Y_target = tf.placeholder(dtype=tf.float32, shape=[None, env.action_space.n], name='Target_Q_values')
 
@@ -55,6 +55,27 @@ def make_directories(main_dir):
     pass
 
 
+def play(sess, agent, no_plays):
+    observation = env.reset()
+    observation = np.expand_dims(observation, axis=0)
+    state = np.append(observation, observation, 1)
+    rewards = []
+    for p in range(no_plays):
+        done = False
+        reward = 0
+        while not done:
+            action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
+            new_state, r, done, _ = env.step(action)
+            new_state = np.expand_dims(new_state, axis=0)
+            state = np.expand_dims(np.append(new_state, state[0][4:]), axis=0)
+            reward += r
+        rewards.append(reward)
+        print("Game: {}/{}".format(p+1, no_plays))
+        print("Reward: {}".format(reward))
+    print("------------------------------------------------------------------------------------------------------")
+    print("Average reward: {}".format(np.mean(rewards)))
+
+
 def train(train_model=True):
     agent = get_agent(X_input)
 
@@ -67,53 +88,58 @@ def train(train_model=True):
     summary_op = tf.summary.merge_all()
     saver = tf.train.Saver()
     init = tf.global_variables_initializer()
-    print("Training agent!")
-    print("Tensorboard files stores in: {}".format(mc.logdir))
     with tf.Session() as sess:
-        sess.run(init)
-        writer = tf.summary.FileWriter(logdir=mc.logdir, graph=sess.graph)
-        t1 = time.time()
-        for e in range(mc.n_epochs):
-            print("-----------------------------Epoch: {}/{}--------------------------------".format(e + 1, mc.n_epochs))
-            observations = collect_observations(sess, agent)
-            for b in range(int(len(observations)/mc.batch_size)):
-                mini_batch = random.sample(observations, mc.batch_size)
-                agent_input = []
-                agent_target = []
-                for s in range(len(mini_batch)):
-                    state = mini_batch[s][0]
-                    action = mini_batch[s][1]
-                    reward = mini_batch[s][2]
-                    next_state = mini_batch[s][3]
-                    done = mini_batch[s][4]
+        if train_model:
+            print("Training agent!")
+            print("Tensorboard files stores in: {}".format(mc.logdir))
+            sess.run(init)
+            writer = tf.summary.FileWriter(logdir=mc.logdir, graph=sess.graph)
+            t1 = time.time()
+            step = 0
+            for e in range(mc.n_epochs):
+                print("--------------------------Epoch: {}/{}------------------------------".format(e + 1, mc.n_epochs))
+                observations = collect_observations(sess, agent)
+                for b in range(int(len(observations)/mc.batch_size)):
+                    mini_batch = random.sample(observations, mc.batch_size)
+                    agent_input = []
+                    agent_target = []
+                    for s in range(len(mini_batch)):
+                        state = mini_batch[s][0]
+                        action = mini_batch[s][1]
+                        reward = mini_batch[s][2]
+                        next_state = mini_batch[s][3]
+                        done = mini_batch[s][4]
 
-                    agent_input.append(state[0])
-                    target = sess.run(agent, feed_dict={X_input: state})
-                    if done:
-                        target[0][action] = reward
-                    else:
-                        agent_output = sess.run(agent, feed_dict={X_input: next_state})
-                        target[0][action] = reward + mc.gamma*(np.amax(agent_output))
-                    agent_target.append(target[0])
+                        agent_input.append(state[0])
+                        target = sess.run(agent, feed_dict={X_input: state})
+                        if done:
+                            target[0][action] = reward
+                        else:
+                            agent_output = sess.run(agent, feed_dict={X_input: next_state})
+                            target[0][action] = reward + mc.gamma*(np.amax(agent_output))
+                            agent_target.append(target[0])
 
-                # Training the agent for 10 iterations. Finally!!
-                for i in range(10):
-                    sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
-                l, summary = sess.run([loss, summary_op],
-                                            feed_dict={X_input: agent_input, Y_target: agent_target})
-                writer.add_summary(summary)
-                print("Batch: {}/{}".format(b+1, int(len(observations)/mc.batch_size)))
-                print("Loss: {:.4f}".format(l))
-        # Save the agent
-        saved_path = saver.save(sess, mc.logdir + '/model_{}'.format(datetime.datetime.now()))
-        print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
-        print("Average time for each epoch: {:.4f}s".format((time.time() - t1)/mc.n_epochs))
-        print("Tensorboard files saved in: {}".format(mc.logdir))
-        print("Model saved in: {}".format(saved_path))
-        print("Agent get to roll!")
-
-        # TODO: Get user input for either play or exit session after training and saving the model
-        # TODO: Make the agent play the game
+                        # Training the agent for 10 iterations. Finally!!
+                        for i in range(10):
+                            sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
+                        l, summary = sess.run([loss, summary_op],
+                                              feed_dict={X_input: agent_input, Y_target: agent_target})
+                        writer.add_summary(summary, global_step=step)
+                        print("Batch: {}/{}".format(b+1, int(len(observations)/mc.batch_size)))
+                        print("Loss: {:.4f}".format(l))
+                        step += 1
+                # Save the agent
+                saved_path = saver.save(sess, mc.logdir + '/model_{}'.format(datetime.datetime.now()))
+                print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
+                print("Average time for each epoch: {:.4f}s".format((time.time() - t1)/mc.n_epochs))
+                print("Tensorboard files saved in: {}".format(mc.logdir))
+                print("Model saved in: {}".format(saved_path))
+                print("Agent get to roll!")
+                # TODO: Get user input for either play or exit session after training and saving the model
+        else:
+            # TODO: Make the agent play the game
+            saver.restore(sess, mc.logdir)
+            play(sess, agent, mc.n_plays)
 
 if __name__ == '__main__':
     train(train_model=True)
