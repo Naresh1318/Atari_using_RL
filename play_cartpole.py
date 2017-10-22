@@ -28,13 +28,13 @@ def get_agent(x, reuse=False):
     return output
 
 
-def collect_observations(sess, agent):
+def collect_observations(sess, agent, prob_rand):
     replay_memory = deque()
     observation = env.reset()
     observation = np.expand_dims(observation, axis=0)
     state = np.append(observation, observation, 1)
     for i in range(mc.observation_time):
-        if np.random.rand() < mc.prob_random:
+        if np.random.rand() < prob_rand:
             action = np.random.randint(low=0, high=env.action_space.n)
         else:
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
@@ -56,14 +56,16 @@ def make_directories(main_dir):
 
 
 def play(sess, agent, no_plays):
-    observation = env.reset()
-    observation = np.expand_dims(observation, axis=0)
-    state = np.append(observation, observation, 1)
     rewards = []
     for p in range(no_plays):
+        observation = env.reset()
+        observation = np.expand_dims(observation, axis=0)
+        state = np.append(observation, observation, 1)
         done = False
         reward = 0
         while not done:
+            # TODO: Comment the next line when running on the cloud
+            env.render()
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
             new_state, r, done, _ = env.step(action)
             new_state = np.expand_dims(new_state, axis=0)
@@ -96,9 +98,11 @@ def train(train_model=True):
             writer = tf.summary.FileWriter(logdir=mc.logdir, graph=sess.graph)
             t1 = time.time()
             step = 0
+            prob_rand = mc.prob_random
             for e in range(mc.n_epochs):
                 print("--------------------------Epoch: {}/{}------------------------------".format(e + 1, mc.n_epochs))
-                observations = collect_observations(sess, agent)
+                prob_rand = prob_rand/1.1
+                observations = collect_observations(sess, agent, prob_rand)
                 for b in range(int(len(observations)/mc.batch_size)):
                     mini_batch = random.sample(observations, mc.batch_size)
                     agent_input = []
@@ -114,20 +118,20 @@ def train(train_model=True):
                         target = sess.run(agent, feed_dict={X_input: state})
                         if done:
                             target[0][action] = reward
+                            agent_target.append(target[0])
                         else:
                             agent_output = sess.run(agent, feed_dict={X_input: next_state})
                             target[0][action] = reward + mc.gamma*(np.amax(agent_output))
                             agent_target.append(target[0])
 
                         # Training the agent for 10 iterations. Finally!!
-                        for i in range(10):
-                            sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
-                        l, summary = sess.run([loss, summary_op],
-                                              feed_dict={X_input: agent_input, Y_target: agent_target})
-                        writer.add_summary(summary, global_step=step)
-                        print("Batch: {}/{}".format(b+1, int(len(observations)/mc.batch_size)))
-                        print("Loss: {:.4f}".format(l))
-                        step += 1
+                    for i in range(10):
+                        sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
+                    l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
+                    writer.add_summary(summary, global_step=step)
+                    print("Batch: {}/{}".format(b+1, int(len(observations)/mc.batch_size)))
+                    print("Loss: {:.4f}".format(l))
+                    step += 1
                 # Save the agent
                 saved_path = saver.save(sess, mc.logdir + '/model_{}'.format(datetime.datetime.now()))
                 print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
@@ -138,8 +142,8 @@ def train(train_model=True):
                 # TODO: Get user input for either play or exit session after training and saving the model
         else:
             # TODO: Make the agent play the game
-            saver.restore(sess, mc.logdir)
+            saver.restore(sess, tf.train.latest_checkpoint(mc.logdir))
             play(sess, agent, mc.n_plays)
 
 if __name__ == '__main__':
-    train(train_model=True)
+    train(train_model=mc.train_model)

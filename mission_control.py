@@ -2,10 +2,10 @@
 # Training
 learning_rate = 0.01
 batch_size = 50
-observation_time = 500
+observation_time = 1000
 prob_random = 0.7
 gamma = 0.9
-n_epochs = 1
+n_epochs = 5000
 n_plays = 100
 
 ########################################################################################################################
