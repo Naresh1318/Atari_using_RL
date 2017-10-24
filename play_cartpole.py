@@ -65,9 +65,9 @@ def play(sess, agent, no_plays):
         reward = 0
         while not done:
             # TODO: Comment the next line when running on the cloud
-            env.render()
+            # env.render()
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
-            print(action)
+            # print(action)
             new_state, r, done, _ = env.step(action)
             new_state = np.expand_dims(new_state, axis=0)
             state = np.expand_dims(np.append(new_state, state[0][:4]), axis=0)
@@ -133,6 +133,7 @@ def train(train_model=True):
                         sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
                     l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
                     writer.add_summary(summary, global_step=step)
+                    # TODO: Store the log files
                     print("Batch: {}/{}".format(b + 1, int(len(observations) / mc.batch_size)))
                     print("Loss: {:.4f}".format(l))
                     step += 1
