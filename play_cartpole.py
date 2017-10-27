@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import gym
 import time
+import os
 import datetime
 import random
 from collections import deque
@@ -52,10 +53,19 @@ def collect_observations(sess, agent, prob_rand):
 
 
 def make_directories(main_dir):
-    pass
+    main_dir = main_dir + "Time_{}".format(datetime.datetime.now())
+    if not os.path.exists(main_dir):
+        os.mkdir(main_dir)
+    tensorboard_dir = main_dir + "/Tensorboard"
+    saved_model_dir = main_dir + "/saved_models"
+    log_dir = main_dir + "/logs"
+    os.mkdir(tensorboard_dir)
+    os.mkdir(saved_model_dir)
+    os.mkdir(log_dir)
+    return tensorboard_dir, saved_model_dir, log_dir
 
 
-def play(sess, agent, no_plays):
+def play(sess, agent, no_plays, ui=False):
     rewards = []
     for p in range(no_plays):
         observation = env.reset()
@@ -64,8 +74,8 @@ def play(sess, agent, no_plays):
         done = False
         reward = 0
         while not done:
-            # TODO: Comment the next line when running on the cloud
-            # env.render()
+            if ui:
+                env.render()
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
             # print(action)
             new_state, r, done, _ = env.step(action)
@@ -96,14 +106,19 @@ def train(train_model=True):
     with tf.Session() as sess:
         if train_model:
             print("Training agent!")
-            print("Tensorboard files stores in: {}".format(mc.logdir))
+            tensorboard_dir, saved_model_dir, log_dir = make_directories(mc.logdir)
+            print("Tensorboard files stores in: {}".format(tensorboard_dir))
+            print("Saved models stored in: {}".format(saved_model_dir))
+            print("Log files stores in: {}".format(log_dir))
             sess.run(init)
-            writer = tf.summary.FileWriter(logdir=mc.logdir, graph=sess.graph)
+            writer = tf.summary.FileWriter(logdir=tensorboard_dir, graph=sess.graph)
             t1 = time.time()
             step = 0
             prob_rand = mc.prob_random
             for e in range(mc.n_epochs):
                 print("--------------------------Epoch: {}/{}------------------------------".format(e + 1, mc.n_epochs))
+                with open(log_dir + "/log.txt", "a") as log_file:
+                    log_file.write("--------------------------Epoch: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
                 if e % 11 == 0:
                     prob_rand = prob_rand / 1.2
                 observations = collect_observations(sess, agent, prob_rand)
@@ -128,27 +143,39 @@ def train(train_model=True):
                             target[0][action] = reward + mc.gamma * (np.amax(agent_output))
                             agent_target.append(target[0])
 
-                            # Training the agent for 10 iterations. Finally!!
+                    # Training the agent for 10 iterations. Finally!!
                     for i in range(10):
                         sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
                     l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
                     writer.add_summary(summary, global_step=step)
-                    # TODO: Store the log files
+                    with open(log_dir + "/log.txt", "a") as log_file:
+                        log_file.write("Batch: {}/{}\n".format(b + 1, int(len(observations) / mc.batch_size)))
+                        log_file.write("Loss: {:.4f}\n".format(l))
                     print("Batch: {}/{}".format(b + 1, int(len(observations) / mc.batch_size)))
                     print("Loss: {:.4f}".format(l))
                     step += 1
-            # Save the agent
-            saved_path = saver.save(sess, mc.logdir + '/model_{}'.format(datetime.datetime.now()))
+                # Save the agent
+                if e % 100 == 0:
+                    saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(datetime.datetime.now()))
             print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
             print("Average time for each epoch: {:.4f}s".format((time.time() - t1) / mc.n_epochs))
-            print("Tensorboard files saved in: {}".format(mc.logdir))
+            print("Tensorboard files saved in: {}".format(tensorboard_dir))
             print("Model saved in: {}".format(saved_path))
+            print("Model parameters stored in: {}".format(log_dir + "mission_control.txt"))
             print("Agent get to roll!")
-            # TODO: Get user input for either play or exit session after training and saving the model
+            with open(log_dir + "/log.txt", "a") as log_file:
+                log_file.write("Time taken of {} epochs on your potato: {:.4f}s\n".format(mc.n_epochs, time.time() - t1))
+                log_file.write("Average time for each epoch: {:.4f}s\n".format((time.time() - t1) / mc.n_epochs))
+            with open("mission_control.py", "r") as mc_file:
+                mission_control_file = mc_file.read()
+                with open(log_dir + "/mission_control.txt", "w") as mc_writer:
+                    mc_writer.write(mission_control_file)
         else:
-            # TODO: Make the agent play the game
-            saver.restore(sess, tf.train.latest_checkpoint(mc.logdir))
-            play(sess, agent, mc.n_plays)
+            # Get the latest trained model
+            saved_models = os.listdir(mc.logdir)
+            latest_saved_model = sorted(saved_models)[0]
+            saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
+            play(sess, agent, mc.n_plays, mc.ui)
 
 
 if __name__ == '__main__':
