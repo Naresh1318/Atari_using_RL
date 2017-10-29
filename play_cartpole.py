@@ -53,7 +53,7 @@ def collect_observations(sess, agent, prob_rand):
 
 
 def make_directories(main_dir):
-    main_dir = main_dir + "Time_{}".format(datetime.datetime.now())
+    main_dir = main_dir + "Time_{}_{}_{}".format(datetime.datetime.now(), mc.n_epochs, mc.learning_rate)
     if not os.path.exists(main_dir):
         os.mkdir(main_dir)
     tensorboard_dir = main_dir + "/Tensorboard"
@@ -65,7 +65,7 @@ def make_directories(main_dir):
     return tensorboard_dir, saved_model_dir, log_dir
 
 
-def play(sess, agent, no_plays, ui=False):
+def play(sess, agent, no_plays, show_ui=False, show_action=False):
     rewards = []
     for p in range(no_plays):
         observation = env.reset()
@@ -74,10 +74,11 @@ def play(sess, agent, no_plays, ui=False):
         done = False
         reward = 0
         while not done:
-            if ui:
+            if show_ui:
                 env.render()
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
-            # print(action)
+            if show_action:
+                print(action)
             new_state, r, done, _ = env.step(action)
             new_state = np.expand_dims(new_state, axis=0)
             state = np.expand_dims(np.append(new_state, state[0][:4]), axis=0)
@@ -96,6 +97,7 @@ def train(train_model=True):
     # loss = tf.reduce_mean(tf.square(agent - Y_target))
     loss = tf.losses.mean_squared_error(labels=Y_target, predictions=agent)
 
+    # TODO: Add loss decay operation
     optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
 
     # Create the summary for tensorboard
@@ -119,7 +121,7 @@ def train(train_model=True):
                 print("--------------------------Epoch: {}/{}------------------------------".format(e + 1, mc.n_epochs))
                 with open(log_dir + "/log.txt", "a") as log_file:
                     log_file.write("--------------------------Epoch: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
-                if e % 11 == 0:
+                if e % 100 == 0:
                     prob_rand = prob_rand / 1.2
                 observations = collect_observations(sess, agent, prob_rand)
                 for b in range(int(len(observations) / mc.batch_size)):
@@ -156,6 +158,8 @@ def train(train_model=True):
                     step += 1
                 # Save the agent
                 if e % 100 == 0:
+                    print("------------------------Playing----------------------------")
+                    play(sess, agent, mc.n_plays, mc.show_ui)
                     saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(datetime.datetime.now()))
             print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
             print("Average time for each epoch: {:.4f}s".format((time.time() - t1) / mc.n_epochs))
@@ -173,9 +177,9 @@ def train(train_model=True):
         else:
             # Get the latest trained model
             saved_models = os.listdir(mc.logdir)
-            latest_saved_model = sorted(saved_models)[0]
+            latest_saved_model = sorted(saved_models)[-1]
             saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
-            play(sess, agent, mc.n_plays, mc.ui)
+            play(sess, agent, mc.n_plays, mc.show_ui, mc.show_action)
 
 
 if __name__ == '__main__':

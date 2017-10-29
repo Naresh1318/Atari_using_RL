@@ -3,23 +3,32 @@
 learning_rate = 0.001
 batch_size = 50
 observation_time = 500
-prob_random = 0.7
+prob_random = 0.8
 gamma = 0.9
 n_epochs = 1000
-n_plays = 100
+n_plays = 20  # TODO: Change to 100
 
 ########################################################################################################################
 # Agent Model
-dense_1 = 400
-dense_2 = 180
-dense_3 = 100
+# dense_1 = 40
+# dense_2 = 18
+# dense_3 = 10
+conv_1 = [8, 8, 4, 32]
+stride_1 = [1, 4, 4, 1]
+conv_2 = [4, 4, 32, 64]
+stride_2 = [1, 2, 2, 1]
+conv_3 = [3, 3, 64, 64]
+stride_3 = [1, 1, 1, 1]
+dense_1 = 512
+dense_2 = 4
 
 
 ########################################################################################################################
 # Control
-train_model = False
-ui = False
+train_model = True
+show_ui = False
+show_action = True
 
 ########################################################################################################################
 # Paths
-logdir = "./Results/CartPole/"
+logdir = "./Results/Breakout/"  # Use: "./Results/CartPole/", "./Results/Breakout/"
