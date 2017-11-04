@@ -1,8 +1,9 @@
 ########################################################################################################################
 # Training
-learning_rate = 0.001
+learning_rate = 0.00025
 batch_size = 32
-observation_time = 1e06
+observation_time = 5e05
+rand_observation_time = 5e4
 prob_random = 1
 gamma = 0.9
 n_epochs = 1
@@ -26,7 +27,7 @@ dense_2 = 4
 
 ########################################################################################################################
 # Control
-train_model = False
+train_model = True
 show_ui = True
 show_action = True
 
