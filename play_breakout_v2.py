@@ -13,13 +13,11 @@ import ops
 env = gym.make('BreakoutDeterministic-v4')
 
 # Placeholders
-# TODO: make the shape of X_input generalized
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
 Y_target = tf.placeholder(dtype=tf.float32, shape=[None, env.action_space.n], name='Target_Q_values')
 
 
 # Dense Fully Connected Agent
-# TODO: x -> [210, 160, 4], try this later
 def get_agent(x, reuse=False):
     if reuse:
         tf.get_variable_scope().reuse_variables()
@@ -45,7 +43,7 @@ def collect_rand_observations(replay_memory):
         for i in range(int(mc.rand_observation_time)):
             action = np.random.randint(low=0, high=env.action_space.n)
             next_state, reward, done, _ = env.step(action)
-            # reward = ops.convert_reward(reward)
+            reward = ops.convert_reward(reward)
             if reward == 1.0:
                 r += 1
                 print("Here!!")
@@ -96,7 +94,7 @@ def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
             if show_action:
                 print(action)
             new_state, r, done, _ = env.step(action)
-            # r = ops.convert_reward(r)
+            r = ops.convert_reward(r)
             next_state = ops.convert_to_gray_n_resize(new_state)
             next_state = np.expand_dims(next_state, axis=2)
             next_state = np.expand_dims(next_state, axis=0)
@@ -164,9 +162,11 @@ def train(train_model=True):
                     mc_writer.write(mission_control_file)
 
             for e in range(mc.n_epochs):
-                print("--------------------------Epoch: {}/{}------------------------------".format(e + 1, mc.n_epochs))
+                print("--------------------------Epoch: {}/{}------------------------------"
+                      .format(e + 1, mc.n_epochs))
                 with open(log_dir + "/log.txt", "a") as log_file:
-                    log_file.write("--------------------------Epoch: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
+                    log_file.write("--------------------------Epoch: {}/{}------------------------------\n"
+                                   .format(e + 1, mc.n_epochs))
                 for b in range(int(mc.observation_time)):
 
                     # Train on the some random steps
@@ -230,7 +230,10 @@ def train(train_model=True):
                     # Save the agent
                     if (b+1) % 50000 == 0:
                         print("------------------------Saving----------------------------")
-                        # play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=log_dir, show_ui=mc.show_ui, show_action=mc.show_action)
+
+                        # play(sess=sess, agent=agent, no_plays=mc.n_plays,
+                        # log_dir=log_dir, show_ui=mc.show_ui, show_action=mc.show_action)
+
                         saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
                         print("Model saved in: {}".format(saved_path))
                 saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
@@ -250,8 +253,8 @@ def train(train_model=True):
             saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
             print("Getting model from: {}".format(mc.logdir + latest_saved_model + "/saved_models/"))
             print("------------------------Playing----------------------------")
-
-            play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=None, show_ui=mc.show_ui, show_action=mc.show_action)
+            play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=None,
+                 show_ui=mc.show_ui, show_action=mc.show_action)
 
 
 if __name__ == '__main__':
