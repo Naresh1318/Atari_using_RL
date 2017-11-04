@@ -12,9 +12,6 @@ import ops
 # Setup the environment
 env = gym.make('BreakoutDeterministic-v4')
 
-# Replay memory
-replay_memory = deque()
-
 # Placeholders
 # TODO: make the shape of X_input generalized
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
@@ -35,19 +32,22 @@ def get_agent(x, reuse=False):
     return output
 
 
-def collect_rand_observations():
-    print("Collecting Observations!!")
+def collect_rand_observations(replay_memory):
+    print("Collecting Random Observations!!")
     observation = env.reset()
     observation = ops.convert_to_gray_n_resize(observation)
     observation = np.expand_dims(observation, axis=2)
     state = np.repeat(observation, 4, axis=2)
     state = np.expand_dims(state, axis=0)
-
+    r = 0
     if len(replay_memory) < mc.rand_observation_time:
         for i in range(int(mc.rand_observation_time)):
             action = np.random.randint(low=0, high=env.action_space.n)
             next_state, reward, done, _ = env.step(action)
-            reward = ops.convert_reward(reward)
+            # reward = ops.convert_reward(reward)
+            if reward == 1.0:
+                r += 1
+                print("Here!!")
             next_state = ops.convert_to_gray_n_resize(next_state)
             next_state = np.expand_dims(next_state, axis=2)
             next_state = np.expand_dims(next_state, axis=0)
@@ -61,6 +61,9 @@ def collect_rand_observations():
                 observation = np.expand_dims(observation, axis=2)
                 state = np.repeat(observation, 4, axis=2)
                 state = np.expand_dims(state, axis=0)
+            print("Random Observation: {}/{}".format(i+1, mc.rand_observation_time))
+        print("Total Positive rewards: {}".format(r))
+    return replay_memory
 
 
 def make_directories(main_dir):
@@ -84,20 +87,15 @@ def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
         state = np.repeat(observation, 4, axis=2)
         state = np.expand_dims(state, axis=0)
         done = False
-        start = True
         reward = 0
         while not done:
             if show_ui:
                 env.render()
-            #if start:
-            #    action = 1
-            #    start = False
-            #else:
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
             if show_action:
                 print(action)
             new_state, r, done, _ = env.step(action)
-            r = ops.convert_reward(r)
+            # r = ops.convert_reward(r)
             next_state = ops.convert_to_gray_n_resize(new_state)
             next_state = np.expand_dims(next_state, axis=2)
             next_state = np.expand_dims(next_state, axis=0)
@@ -128,7 +126,7 @@ def train(train_model=True):
 
     # TODO: Add loss decay operation
     optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate, epsilon=0.01, momentum=0.95).minimize(loss)
-    #optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
+    # optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
 
     # Create the summary for tensorboard
     tf.summary.scalar(name='loss', tensor=loss)
@@ -147,14 +145,15 @@ def train(train_model=True):
             t1 = time.time()
             step = 0
             prob_rand = mc.prob_random
-            collect_rand_observations()  # Get the initial 50k random observations
 
+            # Replay memory
+            replay_memory = deque()
+            replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
             observation = env.reset()
             observation = ops.convert_to_gray_n_resize(observation)
             observation = np.expand_dims(observation, axis=2)
             state = np.repeat(observation, 4, axis=2)
             state = np.expand_dims(state, axis=0)
-
             for e in range(mc.n_epochs):
                 print("--------------------------Epoch: {}/{}------------------------------".format(e + 1, mc.n_epochs))
                 with open(log_dir + "/log.txt", "a") as log_file:
@@ -189,9 +188,9 @@ def train(train_model=True):
                     writer.add_summary(summary, global_step=step)
                     with open(log_dir + "/log.txt", "a") as log_file:
                         log_file.write("Step: {}/{}\n".format(b + 1, int(mc.observation_time)))
-                        log_file.write("Loss: {:.8f}\n".format(l))
-                    print("Step: {}/{}\n".format(b + 1, int(mc.observation_time)))
-                    print("Loss: {:.8f}".format(l))
+                        log_file.write("Loss: {:.10f}\n".format(l))
+                    print("Step: {}/{}".format(b + 1, int(mc.observation_time)))
+                    print("Loss: {:.10f}\n".format(l))
 
                     # Collect the next observation
                     if np.random.rand() <= prob_rand:
@@ -199,7 +198,7 @@ def train(train_model=True):
                     else:
                         action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
                     next_state, reward, done, _ = env.step(action)
-                    reward = ops.convert_reward(reward)
+                    # reward = ops.convert_reward(reward)
                     next_state = ops.convert_to_gray_n_resize(next_state)
                     next_state = np.expand_dims(next_state, axis=2)
                     next_state = np.expand_dims(next_state, axis=0)

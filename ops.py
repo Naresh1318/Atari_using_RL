@@ -67,7 +67,7 @@ def anneal_epsilon(epi, step):
     :return: float, annealed epsilon
     """
     if step < 1e6:
-        epi = epi * (.1**1e-6)
+        epi = epi * (.1**5e-5)
     else:
         epi = 0.1
     return epi
