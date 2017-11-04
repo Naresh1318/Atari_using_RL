@@ -23,6 +23,7 @@ Y_target = tf.placeholder(dtype=tf.float32, shape=[None, env.action_space.n], na
 def get_agent(x, reuse=False):
     if reuse:
         tf.get_variable_scope().reuse_variables()
+    x = tf.divide(x, 255.0, name='Normalize')
     conv_1 = tf.nn.relu(ops.cnn_2d(x, weight_shape=mc.conv_1, strides=mc.stride_1, name='conv_1'))
     conv_2 = tf.nn.relu(ops.cnn_2d(conv_1, weight_shape=mc.conv_2, strides=mc.stride_2, name='conv_2'))
     conv_3 = tf.nn.relu(ops.cnn_2d(conv_2, weight_shape=mc.conv_3, strides=mc.stride_3, name='conv_3'))
@@ -144,6 +145,7 @@ def train(train_model=True):
             writer = tf.summary.FileWriter(logdir=tensorboard_dir, graph=sess.graph)
             t1 = time.time()
             step = 0
+            total_steps = mc.n_epochs * mc.observation_time
             prob_rand = mc.prob_random
 
             # Replay memory
@@ -154,6 +156,13 @@ def train(train_model=True):
             observation = np.expand_dims(observation, axis=2)
             state = np.repeat(observation, 4, axis=2)
             state = np.expand_dims(state, axis=0)
+
+            # Save current model parameters
+            with open("mission_control.py", "r") as mc_file:
+                mission_control_file = mc_file.read()
+                with open(log_dir + "/mission_control.txt", "w") as mc_writer:
+                    mc_writer.write(mission_control_file)
+
             for e in range(mc.n_epochs):
                 print("--------------------------Epoch: {}/{}------------------------------".format(e + 1, mc.n_epochs))
                 with open(log_dir + "/log.txt", "a") as log_file:
@@ -187,9 +196,9 @@ def train(train_model=True):
                     l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
                     writer.add_summary(summary, global_step=step)
                     with open(log_dir + "/log.txt", "a") as log_file:
-                        log_file.write("Step: {}/{}\n".format(b + 1, int(mc.observation_time)))
+                        log_file.write("Step: {}/{}\n".format(b, int(total_steps)))
                         log_file.write("Loss: {:.10f}\n".format(l))
-                    print("Step: {}/{}".format(b + 1, int(mc.observation_time)))
+                    print("Step: {}/{}".format(b, int(total_steps)))
                     print("Loss: {:.10f}\n".format(l))
 
                     # Collect the next observation
@@ -222,8 +231,9 @@ def train(train_model=True):
                     if (b+1) % 50000 == 0:
                         print("------------------------Saving----------------------------")
                         # play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=log_dir, show_ui=mc.show_ui, show_action=mc.show_action)
-                        saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(datetime.datetime.now()))
-                saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(e))
+                        saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
+                        print("Model saved in: {}".format(saved_path))
+                saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
             print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
             print("Average time for each epoch: {:.4f}s".format((time.time() - t1) / mc.n_epochs))
             print("Tensorboard files saved in: {}".format(tensorboard_dir))
@@ -233,16 +243,14 @@ def train(train_model=True):
             with open(log_dir + "/log.txt", "a") as log_file:
                 log_file.write("Time taken of {} epochs on your potato: {:.4f}s\n".format(mc.n_epochs, time.time() - t1))
                 log_file.write("Average time for each epoch: {:.4f}s\n".format((time.time() - t1) / mc.n_epochs))
-            with open("mission_control.py", "r") as mc_file:
-                mission_control_file = mc_file.read()
-                with open(log_dir + "/mission_control.txt", "w") as mc_writer:
-                    mc_writer.write(mission_control_file)
         else:
             # Get the latest trained model
             saved_models = os.listdir(mc.logdir)
             latest_saved_model = sorted(saved_models)[-1]
             saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
+            print("Getting model from: {}".format(mc.logdir + latest_saved_model + "/saved_models/"))
             print("------------------------Playing----------------------------")
+
             play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=None, show_ui=mc.show_ui, show_action=mc.show_action)
 
 

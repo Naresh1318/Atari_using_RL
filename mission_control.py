@@ -1,11 +1,11 @@
 ########################################################################################################################
 # Training
 learning_rate = 0.00025
-batch_size = 100
-observation_time = 5e5
+batch_size = 32
+observation_time = 1e6
 rand_observation_time = 5e4
 prob_random = 1
-gamma = 0.9
+gamma = 0.99
 n_epochs = 5
 fit_epochs = 1
 n_plays = 20  # TODO: Change to 100

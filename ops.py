@@ -44,10 +44,11 @@ def convert_to_gray_n_resize(im):
     :param im: 3d image, image to convert
     :return: 2d image matProcessed image
     """
-    r, g, b = im[:, :, 0], im[:, :, 1], im[:, :, 2]
-    img_gray = 0.2990 * r + 0.5870 * g + 0.1140 * b
+    # r, g, b = im[:, :, 0], im[:, :, 1], im[:, :, 2]
+    # img_gray = 0.2990 * r + 0.5870 * g + 0.1140 * b
+    img_gray = np.mean(im, axis=2).astype(np.uint8)
     img = scipy.misc.imresize(img_gray, size=[84, 84], interp='bicubic')
-    return img
+    return np.array(img, dtype=np.uint8)
 
 
 def convert_reward(reward):
@@ -67,7 +68,7 @@ def anneal_epsilon(epi, step):
     :return: float, annealed epsilon
     """
     if step < 1e6:
-        epi = epi * (.1**5e-5)
+        epi = epi * (.1**1e-6)
     else:
         epi = 0.1
     return epi
