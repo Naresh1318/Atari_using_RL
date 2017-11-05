@@ -10,7 +10,7 @@ import mission_control as mc
 import ops
 
 # Setup the environment
-env = gym.make('BreakoutDeterministic-v4')
+env = gym.make('Breakout-v4')
 
 # Placeholders
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
@@ -43,7 +43,7 @@ def collect_rand_observations(replay_memory):
         for i in range(int(mc.rand_observation_time)):
             action = np.random.randint(low=0, high=env.action_space.n)
             next_state, reward, done, _ = env.step(action)
-            reward = ops.convert_reward(reward)
+            # reward = ops.convert_reward(reward)
             if reward == 1.0:
                 r += 1
                 print("Here!!")
@@ -124,7 +124,7 @@ def train(train_model=True):
     loss = tf.losses.mean_squared_error(labels=Y_target, predictions=agent)
 
     # TODO: Add loss decay operation
-    optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate, epsilon=0.01, momentum=0.95).minimize(loss)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate, decay=0.99, momentum=0.0, epsilon=1e-6).minimize(loss)
     # optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
 
     # Create the summary for tensorboard
@@ -230,10 +230,7 @@ def train(train_model=True):
                     # Save the agent
                     if (b+1) % 50000 == 0:
                         print("------------------------Saving----------------------------")
-
-                        # play(sess=sess, agent=agent, no_plays=mc.n_plays,
-                        # log_dir=log_dir, show_ui=mc.show_ui, show_action=mc.show_action)
-
+                        # play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=log_dir, show_ui=mc.show_ui, show_action=mc.show_action)
                         saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
                         print("Model saved in: {}".format(saved_path))
                 saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)

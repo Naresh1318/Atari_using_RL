@@ -62,13 +62,13 @@ def convert_reward(reward):
 
 def anneal_epsilon(epi, step):
     """
-    Annel epsilon lineraly for the first 1e6 steps, and fix it to a constant value thereafter
+    Anneal epsilon linearly for the first 1e6 steps, and fix it to a constant value thereafter
     :param epi: float, value indicating the probability of random action
     :param step: int or float, steps taken during training
     :return: float, annealed epsilon
     """
-    if step < 1e6:
-        epi = epi * (.1**1e-6)
+    if step < 5e5:
+        epi = epi * (.1**.2e-5)
     else:
         epi = 0.1
     return epi
