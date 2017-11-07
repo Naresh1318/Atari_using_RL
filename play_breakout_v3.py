@@ -235,10 +235,6 @@ def train(train_model=True):
                     l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target, A_selected: agent_action})
                     writer.add_summary(summary, global_step=step)
 
-                    with open(log_dir + "/log.txt", "a") as log_file:
-                        log_file.write("Step: {}/{}\n".format(t, step))
-                        log_file.write("Loss: {:.10f}\n".format(l))
-
                     print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l), end="")
                     sys.stdout.flush()
 
@@ -266,6 +262,10 @@ def train(train_model=True):
 
                     if done:
                         break
+                with open(log_dir + "/log.txt", "a") as log_file:
+                    log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l))
+                    log_file.write("\nReward Obtained: {}".format(np.sum(episode_rewards)))
+
                 print("\nReward Obtained: {}".format(np.sum(episode_rewards)))
                 # Save the agent
                 saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
