@@ -12,12 +12,11 @@ import mission_control_v2 as mc
 import ops
 
 # Setup the environment
-env = gym.make('Breakout-v0')
+env = gym.make('BreakoutDeterministic-v4')
 
 # Placeholders
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
-Y_target = tf.placeholder(dtype=tf.float32, shape=[None], name='Target_Q_values')
-A_selected = tf.placeholder(dtype=tf.int32, shape=[None], name='Action_selected')
+Y_target = tf.placeholder(dtype=tf.float32, shape=[None, env.action_space.n], name='Target_Q_values')
 
 
 # Dense Fully Connected Agent
@@ -58,17 +57,23 @@ def collect_rand_observations(replay_memory):
     observation = np.expand_dims(observation, axis=2)
     state = np.repeat(observation, 4, axis=2)
     state = np.expand_dims(state, axis=0)
+    lives_left = 5
     if len(replay_memory) < mc.rand_observation_time:
         for i in range(int(mc.rand_observation_time)):
             action = np.random.randint(low=0, high=env.action_space.n)
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, info = env.step(action)
             next_state = ops.convert_to_gray_n_resize(next_state)
             next_state = np.expand_dims(next_state, axis=2)
             next_state = np.expand_dims(next_state, axis=0)
             next_states = np.append(next_state, state[:, :, :, :3], axis=3)
-            replay_memory.append((state, action, reward, next_states, done))
+            life_lost = 0
+            if lives_left - info['ale.lives'] > 0:
+                life_lost = 1
+                lives_left -= 1
+            replay_memory.append((state, action, reward, next_states, done, life_lost))
             state = next_states
             if done:
+                lives_left = 5
                 observation = env.reset()
                 observation = ops.convert_to_gray_n_resize(observation)
                 observation = np.expand_dims(observation, axis=2)
@@ -137,12 +142,9 @@ def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
 def train(train_model=True):
     agent = get_agent(X_input)
 
-    # Get the predictions for the chosen actions only
-    gather_indices = tf.range(mc.batch_size) * tf.shape(agent)[1] + A_selected
-    action_predictions = tf.gather(tf.reshape(agent, [-1]), gather_indices)
-
-    # loss = tf.reduce_mean(tf.square(agent - Y_target))
-    loss = tf.losses.mean_squared_error(labels=Y_target, predictions=action_predictions)
+    squared_error = tf.square(agent - Y_target)
+    sum_squared_error = tf.reduce_sum(squared_error, axis=1)
+    loss = tf.reduce_mean(sum_squared_error)
 
     # TODO: Add loss decay operation
     optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate, decay=0.99, momentum=0.0, epsilon=1e-6).minimize(loss)
@@ -190,7 +192,7 @@ def train(train_model=True):
             replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
 
             # Save current model parameters
-            with open("mission_control.py", "r") as mc_file:
+            with open("mission_control_v2.py", "r") as mc_file:
                 mission_control_file = mc_file.read()
                 with open(log_dir + "/mission_control.txt", "w") as mc_writer:
                     mc_writer.write(mission_control_file)
@@ -208,34 +210,37 @@ def train(train_model=True):
                 state = np.expand_dims(state, axis=0)
 
                 episode_rewards = []
+
+                # TODO: Only for breakout
+                lives_left = 5
+                log_q_values = []
                 for t in itertools.count():
                     mini_batch = random.sample(replay_memory, mc.batch_size)
 
                     agent_input = []
                     agent_target = []
-                    agent_action = []
                     for s in range(len(mini_batch)):
                         state_ = mini_batch[s][0]
                         action_ = mini_batch[s][1]
                         reward_ = mini_batch[s][2]
                         next_state_ = mini_batch[s][3]
                         done_ = mini_batch[s][4]
+                        lives = mini_batch[s][5]
 
-                        agent_action.append(action_)
                         agent_input.append(state_[0])
-                        if done_:
-                            target = reward_
-                            agent_target.append(target)
+                        target = sess.run(agent, feed_dict={X_input: state_})
+                        if done_ or lives == 0:
+                            target[0][action_] = reward_
+                            agent_target.append(target[0])
                         else:
                             agent_output = sess.run(agent, feed_dict={X_input: next_state_})
-                            target = reward_ + mc.gamma * (np.amax(agent_output))
-                            agent_target.append(target)
+                            target[0][action_] = reward_ + mc.gamma * (np.amax(agent_output))
+                            agent_target.append(target[0])
 
                     # Training the agent for 1 iterations. Finally!!
                     for i in range(mc.fit_epochs):
-                        sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target, A_selected: agent_action})
+                        _, l, summary = sess.run([optimizer, loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
 
-                    l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target, A_selected: agent_action})
                     writer.add_summary(summary, global_step=step)
 
                     print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l), end="")
@@ -245,18 +250,25 @@ def train(train_model=True):
                     if np.random.rand() < prob_rand:
                         action = np.random.randint(low=0, high=env.action_space.n)
                     else:
-                        action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
-                    next_state, reward, done, _ = env.step(action)
+                        q_prediction = sess.run(agent, feed_dict={X_input: state})
+                        action = np.argmax(q_prediction)
+                        log_q_values.extend(q_prediction)
+                    next_state, reward, done, info = env.step(action)
                     next_state = ops.convert_to_gray_n_resize(next_state)
                     next_state = np.expand_dims(next_state, axis=2)
                     next_state = np.expand_dims(next_state, axis=0)
                     next_states = np.append(next_state, state[:, :, :, :3], axis=3)
 
+                    life_lost = 0
+                    if lives_left - info['ale.lives'] > 0:
+                        life_lost = 1
+                        lives_left -= 1
+
                     # Remove old samples from replay memory if it's full
                     if len(replay_memory) > mc.observation_time:
                         replay_memory.popleft()
 
-                    replay_memory.append((state, action, reward, next_states, done))
+                    replay_memory.append((state, action, reward, next_states, done, life_lost))
                     state = next_states
                     episode_rewards.append(reward)
                     step += 1
@@ -270,6 +282,12 @@ def train(train_model=True):
                     log_file.write("\nReward Obtained: {}".format(np.sum(episode_rewards)))
 
                 print("\nReward Obtained: {}".format(np.sum(episode_rewards)))
+
+                if log_q_values != []:
+                    print("Average Q Value: {}".format(np.mean(log_q_values)))
+                else:
+                    print("All of the actions were random")
+
                 # Save the agent
                 saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
 

@@ -5,7 +5,7 @@ batch_size = 32
 observation_time = 5e5
 rand_observation_time = 5e4
 prob_random = 1
-gamma = 0.99
+gamma = 0.98
 n_plays = 10000
 fit_epochs = 1
 
