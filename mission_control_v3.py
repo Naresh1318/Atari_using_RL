@@ -1,15 +1,15 @@
 ########################################################################################################################
 # Training
-learning_rate = 0.00025
-batch_size = 128
+learning_rate = 1e-6
+batch_size = 32
 observation_time = 5e5
 rand_observation_time = 5e4
 prob_random = 1
-gamma = 0.97
+gamma = 0.99
 n_plays = 10000
 fit_epochs = 1
 decay = 0.75
-
+weight_init = 0.01
 ########################################################################################################################
 # Agent Model
 conv_1 = [3, 3, 2, 16]

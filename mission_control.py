@@ -29,7 +29,7 @@ dense_2 = 4
 
 ########################################################################################################################
 # Control
-train_model = True
+train_model = False
 show_ui = False
 show_action = False
 

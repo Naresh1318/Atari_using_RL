@@ -248,7 +248,7 @@ def train(train_model=True):
 
                     # Collect the next observation
                     if np.random.rand() < prob_rand:
-                        action = np.random.randint(low=0, high=env.action_space.n)
+                        action = random.randrange(start=0, stop=env.action_space.n)
                     else:
                         q_prediction = sess.run(agent, feed_dict={X_input: state})
                         action = np.argmax(q_prediction)
