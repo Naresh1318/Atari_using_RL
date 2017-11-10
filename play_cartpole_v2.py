@@ -8,6 +8,8 @@ import random
 from collections import deque
 import mission_control as mc
 import ops
+import sys
+import itertools
 
 # Setup the environment
 env = gym.make('CartPole-v1')
@@ -29,16 +31,12 @@ def get_agent(x, reuse=False):
     return output
 
 
-def collect_observations(sess, agent, prob_rand):
-    replay_memory = deque()
+def collect_rand_observations(replay_memory):
     observation = env.reset()
     observation = np.expand_dims(observation, axis=0)
     state = np.append(observation, observation, 1)
-    for i in range(int(mc.observation_time)):
-        if np.random.rand() <= prob_rand:
-            action = np.random.randint(low=0, high=env.action_space.n)
-        else:
-            action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
+    for i in range(int(mc.rand_observation_time)):
+        action = np.random.randint(low=0, high=env.action_space.n)
         next_state, reward, done, _ = env.step(action)
         next_state = np.expand_dims(next_state, axis=0)
         # TODO: Interchange next and previous states to check changes
@@ -84,8 +82,9 @@ def play(sess, agent, no_plays, show_ui=False, show_action=False):
             state = np.expand_dims(np.append(new_state, state[0][:4]), axis=0)
             reward += r
         rewards.append(reward)
-        print("Game: {}/{}".format(p + 1, no_plays))
-        print("Reward: {}".format(reward))
+        print("\rGame: {}/{}".format(p + 1, no_plays))
+        print("\rReward: {}".format(reward))
+        sys.stdout.flush()
     print("------------------------------------------------------------------------------------------------------")
     print("Best reward: {}".format(np.amax(rewards)))
     print("Average reward: {}".format(np.mean(rewards)))
@@ -117,32 +116,41 @@ def train(train_model=True):
             t1 = time.time()
             step = 0
             prob_rand = mc.prob_random
-            for e in range(mc.n_epochs):
-                print("--------------------------Epoch: {}/{}------------------------------".format(e + 1, mc.n_epochs))
+
+            # Replay memory
+            replay_memory = deque()
+            replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
+
+            for e in range(mc.n_plays):
+                print("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
                 with open(log_dir + "/log.txt", "a") as log_file:
-                    log_file.write("--------------------------Epoch: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
-                if e % 100 == 0:
-                    prob_rand = prob_rand / 1.2
-                observations = collect_observations(sess, agent, prob_rand)
-                for b in range(int(len(observations) / mc.batch_size)):
-                    mini_batch = random.sample(observations, mc.batch_size)
+                    log_file.write("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
+
+                observation = env.reset()
+                observation = np.expand_dims(observation, axis=0)
+                state = np.append(observation, observation, 1)
+
+                episode_rewards = []
+
+                for t in itertools.count():
+                    mini_batch = random.sample(replay_memory, mc.batch_size)
                     agent_input = []
                     agent_target = []
                     for s in range(len(mini_batch)):
-                        state = mini_batch[s][0]
-                        action = mini_batch[s][1]
-                        reward = mini_batch[s][2]
-                        next_state = mini_batch[s][3]
-                        done = mini_batch[s][4]
+                        state_ = mini_batch[s][0]
+                        action_ = mini_batch[s][1]
+                        reward_ = mini_batch[s][2]
+                        next_state_ = mini_batch[s][3]
+                        done_ = mini_batch[s][4]
 
-                        agent_input.append(state[0])
-                        target = sess.run(agent, feed_dict={X_input: state})
-                        if done:
-                            target[0][action] = reward
+                        agent_input.append(state_[0])
+                        target = sess.run(agent, feed_dict={X_input: state_})
+                        if done_:
+                            target[0][action_] = reward_
                             agent_target.append(target[0])
                         else:
-                            agent_output = sess.run(agent, feed_dict={X_input: next_state})
-                            target[0][action] = reward + mc.gamma * (np.amax(agent_output))
+                            agent_output = sess.run(agent, feed_dict={X_input: next_state_})
+                            target[0][action_] = reward_ + mc.gamma * (np.amax(agent_output))
                             agent_target.append(target[0])
 
                     # Training the agent for 10 iterations. Finally!!
@@ -151,15 +159,40 @@ def train(train_model=True):
                     l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
                     writer.add_summary(summary, global_step=step)
                     with open(log_dir + "/log.txt", "a") as log_file:
-                        log_file.write("Batch: {}/{}\n".format(b + 1, int(len(observations) / mc.batch_size)))
-                        log_file.write("Loss: {:.4f}\n".format(l))
-                    print("Batch: {}/{}".format(b + 1, int(len(observations) / mc.batch_size)))
-                    print("Loss: {:.4f}".format(l))
+                        log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}\n".format(t, step, e+1, mc.n_plays, l))
+
+                    print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l), end="")
+                    sys.stdout.flush()
+
+                    if np.random.rand() < prob_rand:
+                        action = np.random.randint(low=0, high=env.action_space.n)
+                    else:
+                        q_prediction = sess.run(agent, feed_dict={X_input: state})
+                        action = np.argmax(q_prediction)
+
+                    next_state, reward, done, _ = env.step(action)
+                    next_state = np.expand_dims(next_state, axis=0)
+                    # TODO: Interchange next and previous states to check changes
+                    next_states = np.expand_dims(np.append(next_state, state[0][:4]), axis=0)
+
+                    # Remove old samples from replay memory if it's full
+                    if len(replay_memory) > mc.observation_time:
+                        replay_memory.popleft()
+
+                    replay_memory.append((state, action, reward, next_states, done))
+                    episode_rewards.append(reward)
+                    state = next_states
                     step += 1
+
+                    if done:
+                        break
+                prob_rand = prob_rand / 1.02
+                print("\nReward Obtained: {}".format(np.sum(episode_rewards)))
+                print("Random Move Prob: {}".format(prob_rand))
                 # Save the agent
                 if e % 10 == 0:
                     print("------------------------Playing----------------------------")
-                    play(sess, agent, mc.n_plays, mc.show_ui)
+                    play(sess, agent, mc.n_actual_plays, mc.show_ui)
                     saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(datetime.datetime.now()))
             print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
             print("Average time for each epoch: {:.4f}s".format((time.time() - t1) / mc.n_epochs))

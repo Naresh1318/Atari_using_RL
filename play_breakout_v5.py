@@ -28,8 +28,8 @@ def get_agent(x, reuse=False):
     conv_1 = tf.nn.relu(ops.cnn_2d(x, weight_shape=mc.conv_1, strides=mc.stride_1, name='conv_1'))
     conv_2 = tf.nn.relu(ops.cnn_2d(conv_1, weight_shape=mc.conv_2, strides=mc.stride_2, name='conv_2'))
     conv_3 = tf.nn.relu(ops.cnn_2d(conv_2, weight_shape=mc.conv_3, strides=mc.stride_3, name='conv_3'))
-    conv_3_r = tf.reshape(conv_3, [-1, 21*21*64], name='reshape')
-    dense_1 = tf.nn.relu(ops.dense(conv_3_r, 21*21*64, mc.dense_1, name='dense_1'))
+    conv_3_r = tf.reshape(conv_3, [-1, 21 * 21 * 64], name='reshape')
+    dense_1 = tf.nn.relu(ops.dense(conv_3_r, 21 * 21 * 64, mc.dense_1, name='dense_1'))
     dense_2 = tf.nn.relu(ops.dense(dense_1, mc.dense_1, mc.dense_2, name='dense_2'))
     dense_3 = tf.nn.relu(ops.dense(dense_2, mc.dense_2, mc.dense_3, name='dense_3'))
     dense_4 = tf.nn.relu(ops.dense(dense_3, mc.dense_3, mc.dense_4, name='dense_4'))
@@ -60,6 +60,7 @@ def collect_rand_observations(replay_memory):
             output = img_motion + decay * state[0, :, :, 1]
             output = np.expand_dims(output, axis=2)
             output = np.expand_dims(output, axis=0)
+            output = np.clip(output, 0.0, 255.0)
 
             next_states = np.append(next_state, output, axis=3)
             life_lost = 0
@@ -76,7 +77,7 @@ def collect_rand_observations(replay_memory):
                 last_out = np.zeros_like(observation)
                 state = np.append(observation, last_out, axis=2)
                 state = np.expand_dims(state, axis=0)
-            print("\rRandom Observation: {}/{}".format(i+1, mc.rand_observation_time), end="")
+            print("\rRandom Observation: {}/{}".format(i + 1, mc.rand_observation_time), end="")
             sys.stdout.flush()
     return replay_memory
 
@@ -144,7 +145,7 @@ def train(train_model=True):
     loss = tf.reduce_mean(sum_squared_error)
 
     # TODO: Add loss decay operation
-    optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate, decay=0.99, momentum=0.0, epsilon=1e-6).minimize(loss)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate).minimize(loss)
 
     # Create the summary for tensorboard
     tf.summary.scalar(name='loss', tensor=loss)
@@ -238,11 +239,12 @@ def train(train_model=True):
 
                     # Training the agent for 1 iterations. Finally!!
                     for i in range(mc.fit_epochs):
-                        _, l, summary = sess.run([optimizer, loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
+                        _, l, summary = sess.run([optimizer, loss, summary_op],
+                                                 feed_dict={X_input: agent_input, Y_target: agent_target})
 
                     writer.add_summary(summary, global_step=step)
 
-                    print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l), end="")
+                    print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e + 1, mc.n_plays, l), end="")
                     sys.stdout.flush()
 
                     # Collect the next observation
@@ -262,6 +264,7 @@ def train(train_model=True):
                     output = img_motion + decay * state[0, :, :, 1]
                     output = np.expand_dims(output, axis=2)
                     output = np.expand_dims(output, axis=0)
+                    output = np.clip(output, 0.0, 255.0)
 
                     next_states = np.append(next_state, output, axis=3)
 
@@ -284,8 +287,12 @@ def train(train_model=True):
                     if done:
                         break
                 with open(log_dir + "/log.txt", "a") as log_file:
-                    log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l))
-                    log_file.write("\nReward Obtained: {}".format(np.sum(episode_rewards)))
+                    log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}\n".format(t, step, e + 1, mc.n_plays, l))
+                    log_file.write("Reward Obtained: {}\n".format(np.sum(episode_rewards)))
+                    if log_q_values != []:
+                        log_file.write("Average Q Value: {}\n".format(np.mean(log_q_values)))
+                    else:
+                        log_file.write("All of the actions were random\n")
 
                 print("\nReward Obtained: {}".format(np.sum(episode_rewards)))
 
