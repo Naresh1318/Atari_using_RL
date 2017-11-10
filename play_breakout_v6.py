@@ -285,8 +285,12 @@ def train(train_model=True):
                     if done:
                         break
                 with open(log_dir + "/log.txt", "a") as log_file:
-                    log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l))
-                    log_file.write("\nReward Obtained: {}".format(np.sum(episode_rewards)))
+                    log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}\n".format(t, step, e+1, mc.n_plays, l))
+                    log_file.write("Reward Obtained: {}\n".format(np.sum(episode_rewards)))
+                    if log_q_values != []:
+                        log_file.write("Average Q Value: {}\n".format(np.mean(log_q_values)))
+                    else:
+                        log_file.write("All of the actions were random\n")
 
                 print("\nReward Obtained: {}".format(np.sum(episode_rewards)))
 
