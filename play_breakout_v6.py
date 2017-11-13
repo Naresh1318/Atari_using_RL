@@ -146,7 +146,8 @@ def train(train_model=True):
     action_predictions = tf.gather(tf.reshape(agent, [-1]), gather_indices)
 
     # loss = tf.reduce_mean(tf.square(agent - Y_target))
-    loss = tf.losses.mean_squared_error(labels=Y_target, predictions=action_predictions)
+    # loss = tf.losses.mean_squared_error(labels=Y_target, predictions=action_predictions)
+    loss = tf.reduce_max(tf.nn.softmax_cross_entropy_with_logits(labels=Y_target, logits=action_predictions))
 
     optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
 
@@ -302,8 +303,8 @@ def train(train_model=True):
                 if (step+1) % 10000 == 0:
                     # Save the agent
                     saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
-                    play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=None,
-                         show_ui=mc.show_ui, show_action=mc.show_action)
+                    #play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=None,
+                    #     show_ui=mc.show_ui, show_action=mc.show_action)
 
             print("Time taken of {} Plays on your potato: {:.4f}s".format(mc.n_plays, time.time() - t1))
             print("Average time for each Play: {:.4f}s".format((time.time() - t1) / mc.n_plays))

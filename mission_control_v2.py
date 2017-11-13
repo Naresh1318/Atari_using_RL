@@ -7,7 +7,7 @@ rand_observation_time = 5e4
 prob_random = 1
 gamma = 0.99
 n_plays = 10000
-fit_epochs = 1
+fit_epochs = 5
 decay = 0.75
 weight_init = 0.01
 
@@ -25,8 +25,8 @@ dense_2 = 4
 
 ########################################################################################################################
 # Control
-train_model = True
-show_ui = False
+train_model = False
+show_ui = True
 show_action = False
 
 ########################################################################################################################

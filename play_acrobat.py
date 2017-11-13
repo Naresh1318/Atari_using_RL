@@ -6,7 +6,7 @@ import os
 import datetime
 import random
 from collections import deque
-import mission_control as mc
+import mission_control_acrobat as mc
 import ops
 import sys
 import itertools
@@ -51,7 +51,7 @@ def collect_rand_observations(replay_memory):
 
 
 def make_directories(main_dir):
-    main_dir = main_dir + "Time_{}_{}_{}".format(datetime.datetime.now(), mc.n_epochs, mc.learning_rate)
+    main_dir = main_dir + "Time_{}_{}_{}".format(datetime.datetime.now(), mc.n_plays, mc.learning_rate)
     if not os.path.exists(main_dir):
         os.mkdir(main_dir)
     tensorboard_dir = main_dir + "/Tensorboard"
@@ -122,9 +122,9 @@ def train(train_model=True):
             replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
 
             for e in range(mc.n_plays):
-                print("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
+                print("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_plays))
                 with open(log_dir + "/log.txt", "a") as log_file:
-                    log_file.write("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
+                    log_file.write("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_plays))
 
                 observation = env.reset()
                 observation = np.expand_dims(observation, axis=0)
@@ -181,7 +181,8 @@ def train(train_model=True):
 
                     replay_memory.append((state, action, reward, next_states, done))
                     episode_rewards.append(reward)
-                    env.render()
+                    if mc.show_ui:
+                        env.render()
                     state = next_states
                     step += 1
 
@@ -191,20 +192,20 @@ def train(train_model=True):
                 print("\nReward Obtained: {}".format(np.sum(episode_rewards)))
                 print("Random Move Prob: {}".format(prob_rand))
                 # Save the agent
-                if e % 10 == 0:
+                if (e+1) % 100 == 0:
                     print("------------------------Playing----------------------------")
                     play(sess, agent, mc.n_actual_plays, mc.show_ui)
                     saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(datetime.datetime.now()))
-            print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
-            print("Average time for each epoch: {:.4f}s".format((time.time() - t1) / mc.n_epochs))
+            print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_plays, time.time() - t1))
+            print("Average time for each epoch: {:.4f}s".format((time.time() - t1) / mc.n_plays))
             print("Tensorboard files saved in: {}".format(tensorboard_dir))
             print("Model saved in: {}".format(saved_path))
             print("Model parameters stored in: {}".format(log_dir + "mission_control.txt"))
             print("Agent get to roll!")
             with open(log_dir + "/log.txt", "a") as log_file:
-                log_file.write("Time taken of {} epochs on your potato: {:.4f}s\n".format(mc.n_epochs, time.time() - t1))
-                log_file.write("Average time for each epoch: {:.4f}s\n".format((time.time() - t1) / mc.n_epochs))
-            with open("mission_control.py", "r") as mc_file:
+                log_file.write("Time taken of {} epochs on your potato: {:.4f}s\n".format(mc.n_plays, time.time() - t1))
+                log_file.write("Average time for each epoch: {:.4f}s\n".format((time.time() - t1) / mc.n_plays))
+            with open("mission_control_acrbat.py", "r") as mc_file:
                 mission_control_file = mc_file.read()
                 with open(log_dir + "/mission_control.txt", "w") as mc_writer:
                     mc_writer.write(mission_control_file)

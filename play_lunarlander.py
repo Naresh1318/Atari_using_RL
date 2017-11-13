@@ -6,7 +6,7 @@ import os
 import datetime
 import random
 from collections import deque
-import mission_control as mc
+import mission_control_lunar as mc
 import ops
 import sys
 import itertools
@@ -32,6 +32,7 @@ def get_agent(x, reuse=False):
 
 
 def collect_rand_observations(replay_memory):
+    print("Collecting Random Observations")
     observation = env.reset()
     observation = np.expand_dims(observation, axis=0)
     state = np.append(observation, observation, 1)
@@ -39,7 +40,6 @@ def collect_rand_observations(replay_memory):
         action = np.random.randint(low=0, high=env.action_space.n)
         next_state, reward, done, _ = env.step(action)
         next_state = np.expand_dims(next_state, axis=0)
-        # TODO: Interchange next and previous states to check changes
         next_states = np.expand_dims(np.append(next_state, state[0][:env.observation_space.shape[0]]), axis=0)
         replay_memory.append((state, action, reward, next_states, done))
         state = next_states
@@ -47,11 +47,12 @@ def collect_rand_observations(replay_memory):
             observation = env.reset()
             observation = np.expand_dims(observation, axis=0)
             state = np.append(observation, observation, 1)
+        print("\rRandom Observation: {}/{}".format(i + 1, mc.rand_observation_time), end="")
     return replay_memory
 
 
 def make_directories(main_dir):
-    main_dir = main_dir + "Time_{}_{}_{}".format(datetime.datetime.now(), mc.n_epochs, mc.learning_rate)
+    main_dir = main_dir + "Time_{}_{}_{}".format(datetime.datetime.now(), mc.n_plays, mc.learning_rate)
     if not os.path.exists(main_dir):
         os.mkdir(main_dir)
     tensorboard_dir = main_dir + "/Tensorboard"
@@ -70,7 +71,7 @@ def play(sess, agent, no_plays, show_ui=False, show_action=False):
         observation = np.expand_dims(observation, axis=0)
         state = np.append(observation, observation, 1)
         done = False
-        reward = 0
+        reward = []
         while not done:
             if show_ui:
                 env.render()
@@ -80,11 +81,11 @@ def play(sess, agent, no_plays, show_ui=False, show_action=False):
             new_state, r, done, _ = env.step(action)
             new_state = np.expand_dims(new_state, axis=0)
             state = np.expand_dims(np.append(new_state, state[0][:env.observation_space.shape[0]]), axis=0)
-            reward += r
-        rewards.append(reward)
+            reward.append(r)
+        rewards.append(np.sum(reward))
         print("\rGame: {}/{}".format(p + 1, no_plays))
-        print("\rReward: {}".format(reward))
-        print("Last reward: {}".format(reward[-1]))
+        print("\rReward: {}".format(np.sum(reward)))
+        print("Last reward: {}".format(reward[-3:]))
         sys.stdout.flush()
     print("------------------------------------------------------------------------------------------------------")
     print("Best reward: {}".format(np.amax(rewards)))
@@ -102,6 +103,8 @@ def train(train_model=True):
 
     # Create the summary for tensorboard
     tf.summary.scalar(name='loss', tensor=loss)
+    tf.summary.scalar(name='max_q_value', tensor=tf.reduce_max(agent))
+    tf.summary.histogram(name='q_values_hist', values=agent)
     summary_op = tf.summary.merge_all()
     saver = tf.train.Saver()
     init = tf.global_variables_initializer()
@@ -123,9 +126,9 @@ def train(train_model=True):
             replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
 
             for e in range(mc.n_plays):
-                print("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
+                print("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_plays))
                 with open(log_dir + "/log.txt", "a") as log_file:
-                    log_file.write("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
+                    log_file.write("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_plays))
 
                 observation = env.reset()
                 observation = np.expand_dims(observation, axis=0)
@@ -159,8 +162,6 @@ def train(train_model=True):
                         sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
                     l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
                     writer.add_summary(summary, global_step=step)
-                    with open(log_dir + "/log.txt", "a") as log_file:
-                        log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}\n".format(t, step, e+1, mc.n_plays, l))
 
                     print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l), end="")
                     sys.stdout.flush()
@@ -194,6 +195,7 @@ def train(train_model=True):
                 with open(log_dir + "/log.txt", "a") as log_file:
                     log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}\n".format(t, step, e + 1, mc.n_plays, l))
                     log_file.write("Reward Obtained: {}\n".format(np.sum(episode_rewards)))
+                    log_file.write("Last reward: {}\n".format(episode_rewards[-4:]))
                     if log_q_values != []:
                         log_file.write("Average Q Value: {}\n".format(np.mean(log_q_values)))
                     else:
@@ -204,7 +206,7 @@ def train(train_model=True):
                 else:
                     print("\nAll of the actions were random")
 
-                prob_rand = prob_rand / 1.02
+                prob_rand = ops.anneal_epsilon(prob_rand, step)
                 print("Reward Obtained: {}".format(np.sum(episode_rewards)))
                 print("Last reward: {}".format(episode_rewards[-4:]))
                 print("Random Move Prob: {}".format(prob_rand))
@@ -214,16 +216,16 @@ def train(train_model=True):
                     print("------------------------Playing----------------------------")
                     play(sess, agent, mc.n_actual_plays, mc.show_ui)
                     saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(datetime.datetime.now()))
-            print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
-            print("Average time for each epoch: {:.4f}s".format((time.time() - t1) / mc.n_epochs))
+            print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_plays, time.time() - t1))
+            print("Average time for each epoch: {:.4f}s".format((time.time() - t1) / mc.n_plays))
             print("Tensorboard files saved in: {}".format(tensorboard_dir))
             print("Model saved in: {}".format(saved_path))
             print("Model parameters stored in: {}".format(log_dir + "mission_control.txt"))
             print("Agent get to roll!")
             with open(log_dir + "/log.txt", "a") as log_file:
-                log_file.write("Time taken of {} epochs on your potato: {:.4f}s\n".format(mc.n_epochs, time.time() - t1))
-                log_file.write("Average time for each epoch: {:.4f}s\n".format((time.time() - t1) / mc.n_epochs))
-            with open("mission_control.py", "r") as mc_file:
+                log_file.write("Time taken of {} epochs on your potato: {:.4f}s\n".format(mc.n_plays, time.time() - t1))
+                log_file.write("Average time for each epoch: {:.4f}s\n".format((time.time() - t1) / mc.n_plays))
+            with open("mission_control_lunar.py", "r") as mc_file:
                 mission_control_file = mc_file.read()
                 with open(log_dir + "/mission_control.txt", "w") as mc_writer:
                     mc_writer.write(mission_control_file)
@@ -232,6 +234,8 @@ def train(train_model=True):
             saved_models = os.listdir(mc.logdir)
             latest_saved_model = sorted(saved_models)[-1]
             saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
+            print("Getting model from: {}".format(mc.logdir + latest_saved_model + "/saved_models/"))
+            print("------------------------Playing----------------------------")
             play(sess, agent, mc.n_plays, mc.show_ui, mc.show_action)
 
 

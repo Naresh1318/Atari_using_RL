@@ -1,36 +1,27 @@
 ########################################################################################################################
 # Training
-learning_rate = 1e-6
+learning_rate = 0.0001
 batch_size = 32
 observation_time = 5e5
 rand_observation_time = 5e4
 prob_random = 1
-gamma = 0.99
-n_plays = 10000
-fit_epochs = 1
-decay = 0.75
-weight_init = 0.01
+gamma = 0.9
+fit_epochs = 10
+n_plays = 10000  # TODO: Change to 100
+n_actual_plays = 100
+
 ########################################################################################################################
 # Agent Model
-conv_1 = [3, 3, 2, 16]
-stride_1 = [1, 2, 2, 1]
-conv_2 = [3, 3, 16, 32]
-stride_2 = [1, 2, 2, 1]
-conv_3 = [3, 3, 32, 64]
-stride_3 = [1, 1, 1, 1]
-dense_1 = 1024
-dense_2 = 1024
-dense_3 = 1024
-dense_4 = 1024
-dense_5 = 4
-
+dense_1 = 512
+dense_2 = 256
+dense_3 = 64
 
 ########################################################################################################################
 # Control
-train_model = False
-show_ui = True
+train_model = True
+show_ui = False
 show_action = False
 
 ########################################################################################################################
 # Paths
-logdir = "./Results/Breakout/"  # Use: "./Results/CartPole/", "./Results/Breakout/"
+logdir = "./Results/LunarLander/"  # Use: "./Results/CartPole/", "./Results/Breakout/" CartPole_v1
