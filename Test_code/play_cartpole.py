@@ -10,122 +10,85 @@ import mission_control as mc
 import ops
 
 # Setup the environment
-env = gym.make('BreakoutDeterministic-v4')
+env = gym.make('CartPole-v1')
 
 # Placeholders
 # TODO: make the shape of X_input generalized
-X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
+X_input = tf.placeholder(dtype=tf.float32, shape=[None, 8], name='Observations')
 Y_target = tf.placeholder(dtype=tf.float32, shape=[None, env.action_space.n], name='Target_Q_values')
 
 
 # Dense Fully Connected Agent
-# TODO: x -> [210, 160, 4], try this later
 def get_agent(x, reuse=False):
     if reuse:
         tf.get_variable_scope().reuse_variables()
-    conv_1 = tf.nn.relu(ops.cnn_2d(x, weight_shape=mc.conv_1, strides=mc.stride_1, name='conv_1'))
-    conv_2 = tf.nn.relu(ops.cnn_2d(conv_1, weight_shape=mc.conv_2, strides=mc.stride_2, name='conv_2'))
-    conv_3 = tf.nn.relu(ops.cnn_2d(conv_2, weight_shape=mc.conv_3, strides=mc.stride_3, name='conv_3'))
-    conv_3_r = tf.reshape(conv_3, [-1, 7*7*64], name='reshape')
-    dense_1 = tf.nn.relu(ops.dense(conv_3_r, 7*7*64, mc.dense_1, name='dense_1'))
-    output = ops.dense(dense_1, mc.dense_1, mc.dense_2, name='dense_2')
+    dense_1 = tf.nn.relu(ops.dense(x, 8, mc.dense_1, name='dense_1'))
+    dense_2 = tf.nn.relu(ops.dense(dense_1, mc.dense_1, mc.dense_2, name='dense_2'))
+    dense_3 = tf.nn.relu(ops.dense(dense_2, mc.dense_2, mc.dense_3, name='dense_3'))
+    output = ops.dense(dense_3, mc.dense_3, env.action_space.n, name='output')
     return output
 
 
-def collect_observations(sess, agent, prob_rand, step):
-    print("Collecting Observations!!")
+def collect_observations(sess, agent, prob_rand):
     replay_memory = deque()
     observation = env.reset()
-    observation = ops.convert_to_gray_n_resize(observation)
-    observation = np.expand_dims(observation, axis=2)
-    state = np.repeat(observation, 4, axis=2)
-    state = np.expand_dims(state, axis=0)
-    #done = True
+    observation = np.expand_dims(observation, axis=0)
+    state = np.append(observation, observation, 1)
     for i in range(int(mc.observation_time)):
-        #if done:
-        #    action = 1
         if np.random.rand() <= prob_rand:
             action = np.random.randint(low=0, high=env.action_space.n)
         else:
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
         next_state, reward, done, _ = env.step(action)
-        reward = ops.convert_reward(reward)
-        next_state = ops.convert_to_gray_n_resize(next_state)
-        next_state = np.expand_dims(next_state, axis=2)
         next_state = np.expand_dims(next_state, axis=0)
         # TODO: Interchange next and previous states to check changes
-        next_states = np.append(next_state, state[:, :, :, :3], axis=3)
+        next_states = np.expand_dims(np.append(next_state, state[0][:4]), axis=0)
         replay_memory.append((state, action, reward, next_states, done))
         state = next_states
-        step += 1
-        prob_rand = ops.anneal_epsilon(prob_rand, step)
         if done:
             observation = env.reset()
-            observation = ops.convert_to_gray_n_resize(observation)
-            observation = np.expand_dims(observation, axis=2)
-            state = np.repeat(observation, 4, axis=2)
-            state = np.expand_dims(state, axis=0)
-        if (i+1) % 1000 == 0:
-            print(prob_rand)
-            print("Observation: {}/{}".format(i+1, mc.observation_time))
-    return replay_memory, step
+            observation = np.expand_dims(observation, axis=0)
+            state = np.append(observation, observation, 1)
+    return replay_memory
 
 
 def make_directories(main_dir):
     main_dir = main_dir + "Time_{}_{}_{}".format(datetime.datetime.now(), mc.n_epochs, mc.learning_rate)
+    if not os.path.exists(main_dir):
+        os.mkdir(main_dir)
     tensorboard_dir = main_dir + "/Tensorboard"
     saved_model_dir = main_dir + "/saved_models"
     log_dir = main_dir + "/logs"
-    os.mkdir(main_dir)
     os.mkdir(tensorboard_dir)
     os.mkdir(saved_model_dir)
     os.mkdir(log_dir)
     return tensorboard_dir, saved_model_dir, log_dir
 
 
-def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
+def play(sess, agent, no_plays, show_ui=False, show_action=False):
     rewards = []
     for p in range(no_plays):
         observation = env.reset()
-        observation = ops.convert_to_gray_n_resize(observation)
-        observation = np.expand_dims(observation, axis=2)
-        state = np.repeat(observation, 4, axis=2)
-        state = np.expand_dims(state, axis=0)
+        observation = np.expand_dims(observation, axis=0)
+        state = np.append(observation, observation, 1)
         done = False
-        start = True
         reward = 0
         while not done:
             if show_ui:
                 env.render()
-            #if start:
-            #    action = 1
-            #    start = False
-            #else:
             action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
             if show_action:
                 print(action)
             new_state, r, done, _ = env.step(action)
-            r = ops.convert_reward(r)
-            next_state = ops.convert_to_gray_n_resize(new_state)
-            next_state = np.expand_dims(next_state, axis=2)
-            next_state = np.expand_dims(next_state, axis=0)
-            # TODO: Interchange next and previous states to check changes
-            state = np.append(next_state, state[:, :, :, :3], axis=3)
+            new_state = np.expand_dims(new_state, axis=0)
+            state = np.expand_dims(np.append(new_state, state[0][:4]), axis=0)
             reward += r
         rewards.append(reward)
         print("Game: {}/{}".format(p + 1, no_plays))
         print("Reward: {}".format(reward))
-        if not log_dir is None:
-            with open(log_dir + "/log.txt", "a") as log_file:
-                log_file.write("Game: {}/{}\n".format(p + 1, no_plays))
-                log_file.write("Reward: {}\n".format(reward))
     print("------------------------------------------------------------------------------------------------------")
     print("Best reward: {}".format(np.amax(rewards)))
     print("Average reward: {}".format(np.mean(rewards)))
-    if not log_dir is None:
-        with open(log_dir + "/log.txt", "a") as log_file:
-            log_file.write("Best reward: {}\n".format(np.amax(rewards)))
-            log_file.write("Average reward: {}\n".format(np.mean(rewards)))
 
 
 def train(train_model=True):
@@ -135,8 +98,7 @@ def train(train_model=True):
     loss = tf.losses.mean_squared_error(labels=Y_target, predictions=agent)
 
     # TODO: Add loss decay operation
-    optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate, epsilon=0.01, momentum=0.95).minimize(loss)
-    #optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
+    optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
 
     # Create the summary for tensorboard
     tf.summary.scalar(name='loss', tensor=loss)
@@ -159,7 +121,9 @@ def train(train_model=True):
                 print("--------------------------Epoch: {}/{}------------------------------".format(e + 1, mc.n_epochs))
                 with open(log_dir + "/log.txt", "a") as log_file:
                     log_file.write("--------------------------Epoch: {}/{}------------------------------\n".format(e + 1, mc.n_epochs))
-                observations, step = collect_observations(sess, agent, prob_rand, step)
+                if e % 100 == 0:
+                    prob_rand = prob_rand / 1.2
+                observations = collect_observations(sess, agent, prob_rand)
                 for b in range(int(len(observations) / mc.batch_size)):
                     mini_batch = random.sample(observations, mc.batch_size)
                     agent_input = []
@@ -181,22 +145,22 @@ def train(train_model=True):
                             target[0][action] = reward + mc.gamma * (np.amax(agent_output))
                             agent_target.append(target[0])
 
-                    # Training the agent for 1 iterations. Finally!!
+                    # Training the agent for 10 iterations. Finally!!
                     for i in range(mc.fit_epochs):
                         sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
                     l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
                     writer.add_summary(summary, global_step=step)
                     with open(log_dir + "/log.txt", "a") as log_file:
                         log_file.write("Batch: {}/{}\n".format(b + 1, int(len(observations) / mc.batch_size)))
-                        log_file.write("Loss: {:.8f}\n".format(l))
+                        log_file.write("Loss: {:.4f}\n".format(l))
                     print("Batch: {}/{}".format(b + 1, int(len(observations) / mc.batch_size)))
-                    print("Loss: {:.8f}".format(l))
-                    # Save the agent
-                    if (b+1) % 5000 == 0:
-                        print("------------------------Playing----------------------------")
-                        # play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=log_dir, show_ui=mc.show_ui, show_action=mc.show_action)
-                        saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(datetime.datetime.now()))
-                saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(e))
+                    print("Loss: {:.4f}".format(l))
+                    step += 1
+                # Save the agent
+                if e % 10 == 0:
+                    print("------------------------Playing----------------------------")
+                    play(sess, agent, mc.n_plays, mc.show_ui)
+                    saved_path = saver.save(sess, saved_model_dir + '/model_{}'.format(datetime.datetime.now()))
             print("Time taken of {} epochs on your potato: {:.4f}s".format(mc.n_epochs, time.time() - t1))
             print("Average time for each epoch: {:.4f}s".format((time.time() - t1) / mc.n_epochs))
             print("Tensorboard files saved in: {}".format(tensorboard_dir))
@@ -215,8 +179,7 @@ def train(train_model=True):
             saved_models = os.listdir(mc.logdir)
             latest_saved_model = sorted(saved_models)[-1]
             saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
-            print("------------------------Playing----------------------------")
-            play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=None, show_ui=mc.show_ui, show_action=mc.show_action)
+            play(sess, agent, mc.n_plays, mc.show_ui, mc.show_action)
 
 
 if __name__ == '__main__':

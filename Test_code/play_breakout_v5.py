@@ -1,21 +1,23 @@
-import numpy as np
-import tensorflow as tf
-import gym
-import time
-import os
 import datetime
+import itertools
+import os
 import random
 import sys
-import itertools
+import time
 from collections import deque
-import mission_control_v2 as mc
+
+import gym
+import numpy as np
+import tensorflow as tf
+
 import ops
+from Test_code import mission_control_v3 as mc
 
 # Setup the environment
 env = gym.make('BreakoutDeterministic-v4')
 
 # Placeholders
-X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
+X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 2], name='Observations')
 Y_target = tf.placeholder(dtype=tf.float32, shape=[None, env.action_space.n], name='Target_Q_values')
 
 
@@ -28,26 +30,13 @@ def get_agent(x, reuse=False):
     conv_1 = tf.nn.relu(ops.cnn_2d(x, weight_shape=mc.conv_1, strides=mc.stride_1, name='conv_1'))
     conv_2 = tf.nn.relu(ops.cnn_2d(conv_1, weight_shape=mc.conv_2, strides=mc.stride_2, name='conv_2'))
     conv_3 = tf.nn.relu(ops.cnn_2d(conv_2, weight_shape=mc.conv_3, strides=mc.stride_3, name='conv_3'))
-    conv_3_r = tf.reshape(conv_3, [-1, 7*7*64], name='reshape')
-    dense_1 = tf.nn.relu(ops.dense(conv_3_r, 7*7*64, mc.dense_1, name='dense_1'))
-    output = ops.dense(dense_1, mc.dense_1, mc.dense_2, name='dense_2')
+    conv_3_r = tf.reshape(conv_3, [-1, 21 * 21 * 64], name='reshape')
+    dense_1 = tf.nn.relu(ops.dense(conv_3_r, 21 * 21 * 64, mc.dense_1, name='dense_1'))
+    dense_2 = tf.nn.relu(ops.dense(dense_1, mc.dense_1, mc.dense_2, name='dense_2'))
+    dense_3 = tf.nn.relu(ops.dense(dense_2, mc.dense_2, mc.dense_3, name='dense_3'))
+    dense_4 = tf.nn.relu(ops.dense(dense_3, mc.dense_3, mc.dense_4, name='dense_4'))
+    output = ops.dense(dense_4, mc.dense_4, mc.dense_5, name='output')
     return output
-
-
-def copy_parameters(sess, estimator1, estimator2):
-    estim_1_para = [t for t in tf.trainable_variables() if t.name.startswith(estimator1.scope)]
-    estim_2_para = [t for t in tf.trainable_variables() if t.name.startswith(estimator2.scope)]
-
-    # Sort the parameters which helps us copy them
-    estim_1_para = sorted(estim_1_para, key=lambda v: v.name)
-    estim_2_para = sorted(estim_2_para, key=lambda v: v.name)
-
-    update_ops = []
-    for e1_v, e2_v in zip(estim_1_para, estim_2_para):
-        op = e2_v.assign(e1_v)
-        update_ops.append(op)
-
-    sess.run(update_ops)
 
 
 def collect_rand_observations(replay_memory):
@@ -55,9 +44,11 @@ def collect_rand_observations(replay_memory):
     observation = env.reset()
     observation = ops.convert_to_gray_n_resize(observation)
     observation = np.expand_dims(observation, axis=2)
-    state = np.repeat(observation, 4, axis=2)
+    last_out = np.zeros_like(observation)
+    state = np.append(observation, last_out, axis=2)
     state = np.expand_dims(state, axis=0)
     lives_left = 5
+    decay = mc.decay  # Determines the motion tail
     if len(replay_memory) < mc.rand_observation_time:
         for i in range(int(mc.rand_observation_time)):
             action = np.random.randint(low=0, high=env.action_space.n)
@@ -65,7 +56,15 @@ def collect_rand_observations(replay_memory):
             next_state = ops.convert_to_gray_n_resize(next_state)
             next_state = np.expand_dims(next_state, axis=2)
             next_state = np.expand_dims(next_state, axis=0)
-            next_states = np.append(next_state, state[:, :, :, :3], axis=3)
+
+            img_diff = next_state[0, :, :, 0] - state[0, :, :, 0]
+            img_motion = np.where(np.abs(img_diff) > 20, 255.0, 0.0)
+            output = img_motion + decay * state[0, :, :, 1]
+            output = np.expand_dims(output, axis=2)
+            output = np.expand_dims(output, axis=0)
+            output = np.clip(output, 0.0, 255.0)
+
+            next_states = np.append(next_state, output, axis=3)
             life_lost = 0
             if lives_left - info['ale.lives'] > 0:
                 life_lost = 1
@@ -77,9 +76,10 @@ def collect_rand_observations(replay_memory):
                 observation = env.reset()
                 observation = ops.convert_to_gray_n_resize(observation)
                 observation = np.expand_dims(observation, axis=2)
-                state = np.repeat(observation, 4, axis=2)
+                last_out = np.zeros_like(observation)
+                state = np.append(observation, last_out, axis=2)
                 state = np.expand_dims(state, axis=0)
-            print("\rRandom Observation: {}/{}".format(i+1, mc.rand_observation_time), end="")
+            print("\rRandom Observation: {}/{}".format(i + 1, mc.rand_observation_time), end="")
             sys.stdout.flush()
     return replay_memory
 
@@ -147,7 +147,7 @@ def train(train_model=True):
     loss = tf.reduce_mean(sum_squared_error)
 
     # TODO: Add loss decay operation
-    optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate, decay=0.99, momentum=0.0, epsilon=1e-6).minimize(loss)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate).minimize(loss)
 
     # Create the summary for tensorboard
     tf.summary.scalar(name='loss', tensor=loss)
@@ -192,7 +192,7 @@ def train(train_model=True):
             replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
 
             # Save current model parameters
-            with open("mission_control_v2.py", "r") as mc_file:
+            with open("mission_control_v3.py", "r") as mc_file:
                 mission_control_file = mc_file.read()
                 with open(log_dir + "/mission_control.txt", "w") as mc_writer:
                     mc_writer.write(mission_control_file)
@@ -206,8 +206,10 @@ def train(train_model=True):
                 observation = env.reset()
                 observation = ops.convert_to_gray_n_resize(observation)
                 observation = np.expand_dims(observation, axis=2)
-                state = np.repeat(observation, 4, axis=2)
+                last_out = np.zeros_like(observation)
+                state = np.append(observation, last_out, axis=2)
                 state = np.expand_dims(state, axis=0)
+                decay = mc.decay  # Determines the motion tail
 
                 episode_rewards = []
 
@@ -239,16 +241,17 @@ def train(train_model=True):
 
                     # Training the agent for 1 iterations. Finally!!
                     for i in range(mc.fit_epochs):
-                        _, l, summary = sess.run([optimizer, loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
+                        _, l, summary = sess.run([optimizer, loss, summary_op],
+                                                 feed_dict={X_input: agent_input, Y_target: agent_target})
 
                     writer.add_summary(summary, global_step=step)
 
-                    print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l), end="")
+                    print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e + 1, mc.n_plays, l), end="")
                     sys.stdout.flush()
 
                     # Collect the next observation
                     if np.random.rand() < prob_rand:
-                        action = random.randrange(start=0, stop=env.action_space.n)
+                        action = random.randrange(env.action_space.n)
                     else:
                         q_prediction = sess.run(agent, feed_dict={X_input: state})
                         action = np.argmax(q_prediction)
@@ -257,7 +260,15 @@ def train(train_model=True):
                     next_state = ops.convert_to_gray_n_resize(next_state)
                     next_state = np.expand_dims(next_state, axis=2)
                     next_state = np.expand_dims(next_state, axis=0)
-                    next_states = np.append(next_state, state[:, :, :, :3], axis=3)
+
+                    img_diff = next_state[0, :, :, 0] - state[0, :, :, 0]
+                    img_motion = np.where(np.abs(img_diff) > 20, 255.0, 0.0)
+                    output = img_motion + decay * state[0, :, :, 1]
+                    output = np.expand_dims(output, axis=2)
+                    output = np.expand_dims(output, axis=0)
+                    output = np.clip(output, 0.0, 255.0)
+
+                    next_states = np.append(next_state, output, axis=3)
 
                     life_lost = 0
                     if lives_left - info['ale.lives'] > 0:
@@ -278,8 +289,12 @@ def train(train_model=True):
                     if done:
                         break
                 with open(log_dir + "/log.txt", "a") as log_file:
-                    log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l))
-                    log_file.write("\nReward Obtained: {}".format(np.sum(episode_rewards)))
+                    log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}\n".format(t, step, e + 1, mc.n_plays, l))
+                    log_file.write("Reward Obtained: {}\n".format(np.sum(episode_rewards)))
+                    if log_q_values != []:
+                        log_file.write("Average Q Value: {}\n".format(np.mean(log_q_values)))
+                    else:
+                        log_file.write("All of the actions were random\n")
 
                 print("\nReward Obtained: {}".format(np.sum(episode_rewards)))
 
