@@ -2,12 +2,12 @@
 # Training
 learning_rate = 0.00025
 batch_size = 32
-observation_time = 1e6  # 1e3
-rand_observation_time = 5e4  # 5e2
-target_network_update = 1e4  # 1e3
+observation_time = int(1e6)  # 1e3
+rand_observation_time = int(5e4)  # 5e2
+target_network_update = int(1e4)  # 1e3
 prob_random = 1
 gamma = 0.99
-n_episodes = 1e4  # 5
+n_episodes = int(1e4)  # 5
 fit_epochs = 1
 weight_init = 0.01
 momentum = 0.95
