@@ -8,19 +8,20 @@ import random
 import sys
 import itertools
 from collections import deque
-import mission_control_v2 as mc
+import mission_control_breakout as mc
 import ops
+import matplotlib.pyplot as plt
 
 # Setup the environment
 env = gym.make('BreakoutDeterministic-v4')
 
 # Placeholders
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
-Y_target = tf.placeholder(dtype=tf.float32, shape=[None], name='Target_Q_values')
-A_selected = tf.placeholder(dtype=tf.int32, shape=[None], name='Action_selected')
+Y_target = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='Target_Q_values')
+
+epsilon_values = np.linspace(1, 0.1, 1e6)
 
 
-# Dense Fully Connected Agent
 def get_agent(x, reuse=False):
     if reuse:
         tf.get_variable_scope().reuse_variables()
@@ -35,9 +36,9 @@ def get_agent(x, reuse=False):
     return output
 
 
-def copy_parameters(sess, estimator1, estimator2):
-    estim_1_para = [t for t in tf.trainable_variables() if t.name.startswith(estimator1.scope)]
-    estim_2_para = [t for t in tf.trainable_variables() if t.name.startswith(estimator2.scope)]
+def copy_parameters(sess):
+    estim_1_para = [t for t in tf.trainable_variables() if t.name.startswith("Action_agent")]
+    estim_2_para = [t for t in tf.trainable_variables() if t.name.startswith("Target_agent")]
 
     # Sort the parameters which helps us copy them
     estim_1_para = sorted(estim_1_para, key=lambda v: v.name)
@@ -49,6 +50,20 @@ def copy_parameters(sess, estimator1, estimator2):
         update_ops.append(op)
 
     sess.run(update_ops)
+    print("\nTarget network copied\n")
+
+
+def anneal_epsilon(step):
+    """
+    Anneal epsilon exponentially for the first 1e6 steps, and fix it to a constant value thereafter
+    :param step: int or float, steps taken during training
+    :return: float, annealed epsilon
+    """
+    if step < 1e6:
+        epi = epsilon_values[step]
+    else:
+        epi = 0.1
+    return epi
 
 
 def collect_rand_observations(replay_memory):
@@ -61,7 +76,7 @@ def collect_rand_observations(replay_memory):
     lives_left = 5
     if len(replay_memory) < mc.rand_observation_time:
         for i in range(int(mc.rand_observation_time)):
-            action = np.random.randint(low=0, high=env.action_space.n)
+            action = env.action_space.sample()
             next_state, reward, done, info = env.step(action)
             next_state = ops.convert_to_gray_n_resize(next_state)
             next_state = np.expand_dims(next_state, axis=2)
@@ -86,7 +101,7 @@ def collect_rand_observations(replay_memory):
 
 
 def make_directories(main_dir):
-    main_dir = main_dir + "Time_{}_{}_{}".format(datetime.datetime.now(), mc.n_plays, mc.learning_rate)
+    main_dir = main_dir + "Time_{}_{}_{}".format(datetime.datetime.now(), mc.n_episodes, mc.learning_rate)
     tensorboard_dir = main_dir + "/Tensorboard"
     saved_model_dir = main_dir + "/saved_models"
     log_dir = main_dir + "/logs"
@@ -139,26 +154,30 @@ def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
 
 
 def train(train_model=True):
-    agent = get_agent(X_input)
 
-    # Get the predictions for the chosen actions only
-    gather_indices = tf.range(mc.batch_size) * tf.shape(agent)[1] + A_selected
-    action_predictions = tf.gather(tf.reshape(agent, [-1]), gather_indices)
+    with tf.variable_scope("Action_agent"):
+        agent = get_agent(X_input)
 
-    # loss = tf.reduce_mean(tf.square(agent - Y_target))
-    # loss = tf.losses.mean_squared_error(labels=Y_target, predictions=action_predictions)
-    loss = tf.reduce_max(tf.nn.softmax_cross_entropy_with_logits(labels=Y_target, logits=action_predictions))
+    with tf.variable_scope("Target_agent"):
+        target_agent = get_agent(X_input)
 
-    optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
+    loss = tf.losses.mean_squared_error(labels=Y_target, predictions=agent)
+
+    var_list = tf.trainable_variables()
+    agent_vars = [t for t in var_list if t.name.startswith("Action_agent")]
+
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=mc.learning_rate, momentum=mc.momentum,
+                                          epsilon=mc.epsilon).minimize(loss, var_list=agent_vars)
 
     # Create the summary for tensorboard
+    # TODO: Plot the rewards per episode
     tf.summary.scalar(name='loss', tensor=loss)
-    tf.summary.scalar(name='max_q_value', tensor=tf.reduce_max(agent))
+    tf.summary.scalar(name='max_q_value', tensor=tf.reduce_max(agent))  # TODO: Replace this to the op in the paper
     tf.summary.histogram(name='q_values_hist', values=agent)
-    summary_op = tf.summary.merge_all()
 
     saver = tf.train.Saver()
     init = tf.global_variables_initializer()
+
     with tf.Session() as sess:
         if train_model:
             print("Training agent!")
@@ -185,25 +204,27 @@ def train(train_model=True):
             prob_rand = mc.prob_random
 
             # Add epsilon to Tensorboard
-            episode_summary = tf.Summary()
-            episode_summary.value.add(simple_value=prob_rand, tag="epsilon")
-            writer.add_summary(episode_summary, step)
+            tf.summary.scalar('epsilon', tensor=prob_rand)
+            summary_op = tf.summary.merge_all()
 
             # Replay memory
             replay_memory = deque()
             replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
 
-            # Save current model parameters
-            with open("mission_control_v2.py", "r") as mc_file:
+            game_rewards = []
+
+            # Save current mission control file
+            with open("mission_control_breakout.py", "r") as mc_file:
                 mission_control_file = mc_file.read()
                 with open(log_dir + "/mission_control.txt", "w") as mc_writer:
                     mc_writer.write(mission_control_file)
 
-            for e in range(mc.n_plays):
+            for e in range(mc.n_episodes):
                 with open(log_dir + "/log.txt", "a") as log_file:
-                    log_file.write("--------------------------Play: {}/{}------------------------------\n"
-                                   .format(e + 1, mc.n_plays))
-
+                    log_file.write("--------------------------Episode: {}/{}------------------------------\n"
+                                   .format(e + 1, mc.n_episodes))
+                print("--------------------------Episode: {}/{}------------------------------\n"
+                      .format(e + 1, mc.n_episodes))
                 # Prepare first observation
                 observation = env.reset()
                 observation = ops.convert_to_gray_n_resize(observation)
@@ -220,40 +241,41 @@ def train(train_model=True):
 
                     agent_input = []
                     agent_target = []
-                    agent_action = []
                     for s in range(len(mini_batch)):
                         state_ = mini_batch[s][0]
                         action_ = mini_batch[s][1]
                         reward_ = mini_batch[s][2]
                         next_state_ = mini_batch[s][3]
                         done_ = mini_batch[s][4]
-                        lives = mini_batch[s][5]
+                        life_lost = mini_batch[s][5]
 
-                        agent_action.append(action_)
                         agent_input.append(state_[0])
-                        if done_ or lives == 0:
-                            target = reward_
-                            agent_target.append(target)
+                        target = sess.run(target_agent, feed_dict={X_input: state_})
+                        if done_ or life_lost == 1:
+                            target[0, action_] = reward_
+                            agent_target.append(target[0])
                         else:
-                            agent_output = sess.run(agent, feed_dict={X_input: next_state_})
-                            target = reward_ + mc.gamma * (np.amax(agent_output))
-                            agent_target.append(target)
+                            agent_output = sess.run(target_agent, feed_dict={X_input: next_state_})
+                            target[0, action_] = reward_ + mc.gamma * (np.amax(agent_output))
+                            agent_target.append(target[0])
 
                     # Training the agent for 1 iterations. Finally!!
                     for i in range(mc.fit_epochs):
-                        sess.run(optimizer,
-                                 feed_dict={X_input: agent_input, Y_target: agent_target, A_selected: agent_action})
+                        sess.run(optimizer, feed_dict={X_input: agent_input, Y_target: agent_target})
 
-                    l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target,
-                                                                         A_selected: agent_action})
+                    # Copy trained parameters from the agent to the target network
+                    if (step+1) % mc.target_network_update == 0:
+                        copy_parameters(sess)
+
+                    l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
                     writer.add_summary(summary, global_step=step)
 
-                    print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e + 1, mc.n_plays, l), end="")
+                    print("\rStep: {} ({}), Episode: {}/{}, Loss: {}".format(t, step, e + 1, mc.n_episodes, l), end="")
                     sys.stdout.flush()
 
                     # Collect the next observation
                     if np.random.rand() < prob_rand:
-                        action = random.randrange(start=0, stop=env.action_space.n)
+                        action = env.action_space.sample()
                     else:
                         q_prediction = sess.run(agent, feed_dict={X_input: state})
                         action = np.argmax(q_prediction)
@@ -278,16 +300,25 @@ def train(train_model=True):
                     episode_rewards.append(reward)
                     step += 1
 
-                    prob_rand = ops.anneal_epsilon(prob_rand, step)
+                    prob_rand = anneal_epsilon(step)
 
                     if mc.show_ui:
                         env.render()
 
                     if done:
                         break
+
                 with open(log_dir + "/log.txt", "a") as log_file:
-                    log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}\n".format(t, step, e+1, mc.n_plays, l))
+                    log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}\n".format(t, step, e + 1, mc.n_episodes, l))
                     log_file.write("Reward Obtained: {}\n".format(np.sum(episode_rewards)))
+                    game_rewards.append(np.sum(episode_rewards))
+                    x_val = np.arange(e+1)
+                    plt.plot(x_val, game_rewards)
+                    plt.xlabel("Episode")
+                    plt.ylabel("Reward Obtained")
+                    plt.savefig("{}/Rewards.png".format(log_dir))
+                    plt.close()
+
                     if log_q_values != []:
                         log_file.write("Average Q Value: {}\n".format(np.mean(log_q_values)))
                     else:
@@ -303,18 +334,18 @@ def train(train_model=True):
                 if (step+1) % 10000 == 0:
                     # Save the agent
                     saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
-                    #play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=None,
+                    # play(sess=sess, agent=agent, no_plays=mc.n_episodes, log_dir=None,
                     #     show_ui=mc.show_ui, show_action=mc.show_action)
 
-            print("Time taken of {} Plays on your potato: {:.4f}s".format(mc.n_plays, time.time() - t1))
-            print("Average time for each Play: {:.4f}s".format((time.time() - t1) / mc.n_plays))
+            print("Time taken of {} Plays on your potato: {:.4f}s".format(mc.n_episodes, time.time() - t1))
+            print("Average time for each Play: {:.4f}s".format((time.time() - t1) / mc.n_episodes))
             print("Tensorboard files saved in: {}".format(tensorboard_dir))
             print("Model saved in: {}".format(saved_path))
             print("Model parameters stored in: {}".format(log_dir + "mission_control.txt"))
             print("Agent get to roll!")
             with open(log_dir + "/log.txt", "a") as log_file:
-                log_file.write("Time taken of {} epochs on your potato: {:.4f}s\n".format(mc.n_plays, time.time() - t1))
-                log_file.write("Average time for each epoch: {:.4f}s\n".format((time.time() - t1) / mc.n_plays))
+                log_file.write("Time taken of {} episodes on your potato: {:.4f}s\n".format(mc.n_episodes, time.time() - t1))
+                log_file.write("Average time for each episode: {:.4f}s\n".format((time.time() - t1) / mc.n_episodes))
         else:
             # Get the latest trained model
             saved_models = os.listdir(mc.logdir)
@@ -322,7 +353,7 @@ def train(train_model=True):
             saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
             print("Getting model from: {}".format(mc.logdir + latest_saved_model + "/saved_models/"))
             print("------------------------Playing----------------------------")
-            play(sess=sess, agent=agent, no_plays=mc.n_plays, log_dir=None,
+            play(sess=sess, agent=agent, no_plays=mc.n_episodes, log_dir=None,
                  show_ui=mc.show_ui, show_action=mc.show_action)
 
 

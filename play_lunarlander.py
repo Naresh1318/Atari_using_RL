@@ -37,7 +37,7 @@ def collect_rand_observations(replay_memory):
     observation = np.expand_dims(observation, axis=0)
     state = np.append(observation, observation, 1)
     for i in range(int(mc.rand_observation_time)):
-        action = np.random.randint(low=0, high=env.action_space.n)
+        action = env.action_space.sample()
         next_state, reward, done, _ = env.step(action)
         next_state = np.expand_dims(next_state, axis=0)
         next_states = np.expand_dims(np.append(next_state, state[0][:env.observation_space.shape[0]]), axis=0)
@@ -95,8 +95,12 @@ def play(sess, agent, no_plays, show_ui=False, show_action=False):
 def train(train_model=True):
     agent = get_agent(X_input)
 
-    # loss = tf.reduce_mean(tf.square(agent - Y_target))
-    loss = tf.losses.mean_squared_error(labels=Y_target, predictions=agent)
+    loss = tf.reduce_mean(tf.square(agent - Y_target))
+    # loss = tf.losses.mean_squared_error(labels=Y_target, predictions=agent)
+
+    regularization = tf.nn.l2_loss(loss)
+
+    loss = tf.reduce_mean(loss + 0.01 * regularization)
 
     # TODO: Add loss decay operation
     optimizer = tf.train.AdamOptimizer(learning_rate=mc.learning_rate).minimize(loss)
@@ -119,17 +123,21 @@ def train(train_model=True):
             writer = tf.summary.FileWriter(logdir=tensorboard_dir, graph=sess.graph)
             t1 = time.time()
             step = 0
-            prob_rand = mc.prob_random
+            prob_rand_list = np.linspace(mc.prob_random, 0, 300)
 
             # Replay memory
             replay_memory = deque()
             replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
 
             for e in range(mc.n_plays):
-                print("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_plays))
+                print("\n--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_plays))
                 with open(log_dir + "/log.txt", "a") as log_file:
                     log_file.write("--------------------------Play: {}/{}------------------------------\n".format(e + 1, mc.n_plays))
 
+                if e < 300:
+                    prob_rand = prob_rand_list[e]
+                else:
+                    prob_rand = 0.05
                 observation = env.reset()
                 observation = np.expand_dims(observation, axis=0)
                 state = np.append(observation, observation, 1)
@@ -137,6 +145,36 @@ def train(train_model=True):
                 episode_rewards = []
                 log_q_values = []
                 for t in itertools.count():
+                    if np.random.rand() < prob_rand:
+                        action = np.random.randint(low=0, high=env.action_space.n)
+                    else:
+                        q_prediction = sess.run(agent, feed_dict={X_input: state})
+                        action = np.argmax(q_prediction)
+                        log_q_values.extend(q_prediction)
+
+                    next_state, reward, done, _ = env.step(action)
+                    next_state = np.expand_dims(next_state, axis=0)
+                    next_states = np.expand_dims(np.append(next_state, state[0][:env.observation_space.shape[0]]), axis=0)
+
+                    # Remove old samples from replay memory if it's full
+                    if len(replay_memory) > mc.observation_time:
+                        replay_memory.popleft()
+
+                    replay_memory.append((state, action, reward, next_states, done))
+                    episode_rewards.append(reward)
+                    if mc.show_ui:
+                        env.render()
+                    state = next_states
+                    step += 1
+                    # prob_rand = ops.anneal_epsilon(prob_rand, step)
+                    print("\rStep: {} ({}), Play: {}/{}".format(t, step, e+1, mc.n_plays), end="")
+                    sys.stdout.flush()
+
+                    if done:
+                        break
+                print("Step: {} ({}), Play: {}/{}".format(t, step, e + 1, mc.n_plays), end="")
+                total_no_batches = int(len(replay_memory)/mc.batch_size)
+                for b in range(total_no_batches):
                     mini_batch = random.sample(replay_memory, mc.batch_size)
                     agent_input = []
                     agent_target = []
@@ -163,34 +201,8 @@ def train(train_model=True):
                     l, summary = sess.run([loss, summary_op], feed_dict={X_input: agent_input, Y_target: agent_target})
                     writer.add_summary(summary, global_step=step)
 
-                    print("\rStep: {} ({}), Play: {}/{}, Loss: {}".format(t, step, e+1, mc.n_plays, l), end="")
+                    print("\rBatch: {}/{}  Loss: {}".format(b, total_no_batches, l), end="")
                     sys.stdout.flush()
-
-                    if np.random.rand() < prob_rand:
-                        action = np.random.randint(low=0, high=env.action_space.n)
-                    else:
-                        q_prediction = sess.run(agent, feed_dict={X_input: state})
-                        action = np.argmax(q_prediction)
-                        log_q_values.extend(q_prediction)
-
-                    next_state, reward, done, _ = env.step(action)
-                    next_state = np.expand_dims(next_state, axis=0)
-                    # TODO: Interchange next and previous states to check changes
-                    next_states = np.expand_dims(np.append(next_state, state[0][:env.observation_space.shape[0]]), axis=0)
-
-                    # Remove old samples from replay memory if it's full
-                    if len(replay_memory) > mc.observation_time:
-                        replay_memory.popleft()
-
-                    replay_memory.append((state, action, reward, next_states, done))
-                    episode_rewards.append(reward)
-                    if mc.show_ui:
-                        env.render()
-                    state = next_states
-                    step += 1
-
-                    if done:
-                        break
 
                 with open(log_dir + "/log.txt", "a") as log_file:
                     log_file.write("Step: {} ({}), Play: {}/{}, Loss: {}\n".format(t, step, e + 1, mc.n_plays, l))
@@ -206,7 +218,6 @@ def train(train_model=True):
                 else:
                     print("\nAll of the actions were random")
 
-                prob_rand = ops.anneal_epsilon(prob_rand, step)
                 print("Reward Obtained: {}".format(np.sum(episode_rewards)))
                 print("Last reward: {}".format(episode_rewards[-4:]))
                 print("Random Move Prob: {}".format(prob_rand))

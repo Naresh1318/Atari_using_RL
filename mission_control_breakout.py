@@ -1,15 +1,18 @@
 ########################################################################################################################
 # Training
-learning_rate = 1e-6
+learning_rate = 0.00025
 batch_size = 32
-observation_time = 5e5
-rand_observation_time = 5e4
+observation_time = 1e6  # 1e3
+rand_observation_time = 5e4  # 5e2
+target_network_update = 1e4  # 1e3
 prob_random = 1
 gamma = 0.99
-n_plays = 10000
-fit_epochs = 5
-decay = 0.75
+n_episodes = 1e4  # 5
+fit_epochs = 1
 weight_init = 0.01
+momentum = 0.95
+epsilon = 0.01
+
 
 ########################################################################################################################
 # Agent Model
@@ -19,14 +22,14 @@ conv_2 = [4, 4, 32, 64]
 stride_2 = [1, 2, 2, 1]
 conv_3 = [3, 3, 64, 64]
 stride_3 = [1, 1, 1, 1]
-dense_1 = 512  # Was 256 before
+dense_1 = 512
 dense_2 = 4
 
 
 ########################################################################################################################
 # Control
-train_model = False
-show_ui = True
+train_model = True
+show_ui = False
 show_action = False
 
 ########################################################################################################################
