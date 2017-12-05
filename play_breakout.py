@@ -341,6 +341,10 @@ def train(train_model=True):
                     episode_rewards.append(reward)
                     step += 1
 
+                    if (step + 1) % 10000 == 0:
+                        # Save the agent
+                        saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
+
                     prob_rand = anneal_epsilon(step)
 
                     if mc.show_ui:
@@ -371,12 +375,6 @@ def train(train_model=True):
                     print("Average Q Value: {}".format(np.mean(log_q_values)))
                 else:
                     print("All of the actions were random")
-
-                if (step+1) % 10000 == 0:
-                    # Save the agent
-                    saved_path = saver.save(sess, saved_model_dir + '/model', global_step=step)
-                    # play(sess=sess, agent=agent, no_plays=mc.n_episodes, log_dir=None,
-                    #     show_ui=mc.show_ui, show_action=mc.show_action)
 
             print("Time taken of {} Plays on your potato: {:.4f}s".format(mc.n_episodes, time.time() - t1))
             print("Average time for each Play: {:.4f}s".format((time.time() - t1) / mc.n_episodes))
