@@ -32,6 +32,7 @@ train_model = True
 show_ui = False
 show_action = False
 
+
 ########################################################################################################################
 # Paths
 logdir = "./Results/Breakout/"  # Use: "./Results/CartPole/", "./Results/Breakout/"
