@@ -23,6 +23,13 @@ epsilon_values = np.linspace(1, 0.1, 1e6)
 
 
 def get_agent(x, reuse=False):
+    """
+    Generate the CNN agent
+    :param x: tensor, Input frames concatenated along axis 3
+    :param reuse: bool, True -> Reuse weight variables
+                        False -> Create new ones
+    :return: Tensor, logits for each valid action
+    """
     if reuse:
         tf.get_variable_scope().reuse_variables()
 
@@ -36,9 +43,15 @@ def get_agent(x, reuse=False):
     return output
 
 
-def copy_parameters(sess):
-    estim_1_para = [t for t in tf.trainable_variables() if t.name.startswith("Action_agent")]
-    estim_2_para = [t for t in tf.trainable_variables() if t.name.startswith("Target_agent")]
+def copy_parameters(sess, agent_1="Action_agent", agent_2="Target_agent"):
+    """
+    Copies parameters from agent_1 to agent_2
+    :param agent_1: String, variable scope of agent_1
+    :param agent_2: String, variable scope of agent_2
+    :param sess: op, session instance from tensorflow
+    """
+    estim_1_para = [t for t in tf.trainable_variables() if t.name.startswith(agent_1)]
+    estim_2_para = [t for t in tf.trainable_variables() if t.name.startswith(agent_2)]
 
     # Sort the parameters which helps us copy them
     estim_1_para = sorted(estim_1_para, key=lambda v: v.name)
@@ -67,6 +80,12 @@ def anneal_epsilon(step):
 
 
 def collect_rand_observations(replay_memory):
+    """
+    Collects mc.rand_observation_time number of random observations and stores them in deque
+    :param replay_memory: deque, deque instance
+    :return: ndarray, stored as follows:
+                      (state, action, reward, next_states, done, life_lost)
+    """
     print("Collecting Random Observations")
     observation = env.reset()
     observation = ops.convert_to_gray_n_resize(observation)
@@ -101,6 +120,11 @@ def collect_rand_observations(replay_memory):
 
 
 def make_directories(main_dir):
+    """
+    Create directories to store tenorboard files, saved models and log files during each unique run.
+    :param main_dir: String, points to a results file
+    :return: list of strings, required directories paths
+    """
     main_dir = main_dir + "Time_{}_{}_{}".format(datetime.datetime.now(), mc.n_episodes, mc.learning_rate)
     tensorboard_dir = main_dir + "/Tensorboard"
     saved_model_dir = main_dir + "/saved_models"
@@ -113,6 +137,18 @@ def make_directories(main_dir):
 
 
 def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
+    """
+    Use a trained agent to play a required number of games
+    :param sess: op, session instance from tensorflow
+    :param agent: tensor, trained agent structure/graph
+    :param no_plays: int, you get it
+    :param log_dir: string, place to store the log files during gameplay
+    :param show_ui: bool, True  -> Show game screen
+                          False -> Should I explain this?
+    :param show_action: bool, True  -> Show the actions taken by the trained agent
+                              False -> Hmm, what can this be?
+    :return: just prints the results with nothing being returned
+    """
     rewards = []
     for p in range(no_plays):
         observation = env.reset()
@@ -154,7 +190,12 @@ def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
 
 
 def train(train_model=True):
-
+    """
+    Trains the agent with hyperparameters and other info loaded from mission_control_<game>.py file
+    :param train_model: bool, True  -> Trains the agent
+                              False -> Loads the LATEST trained agent and plays
+    :return: absolutely nothing
+    """
     with tf.variable_scope("Action_agent"):
         agent = get_agent(X_input)
 
