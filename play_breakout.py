@@ -13,7 +13,7 @@ import ops
 import matplotlib.pyplot as plt
 
 # Setup the environment
-env = gym.make('BreakoutDeterministic-v4')
+env = gym.make('Breakout-v4')
 
 # Placeholders
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
@@ -161,8 +161,8 @@ def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
         while not done:
             if show_ui:
                 env.render()
-            if np.random.rand() < 0.01:
-                action = random.randrange(start=0, stop=env.action_space.n)
+            if np.random.rand() < 0.1:
+                action = env.action_space.sample()
             else:
                 action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
             if show_action:
@@ -215,6 +215,9 @@ def train(train_model=True):
     tf.summary.scalar(name='loss', tensor=loss)
     tf.summary.scalar(name='max_q_value', tensor=tf.reduce_max(agent))  # TODO: Replace this to the op in the paper
     tf.summary.histogram(name='q_values_hist', values=agent)
+
+    # TODO: Plot the length of each episode
+    # TODO: Plot the argmax of the action taken for each play
 
     saver = tf.train.Saver()
     init = tf.global_variables_initializer()
