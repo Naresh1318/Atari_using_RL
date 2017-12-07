@@ -8,7 +8,7 @@ import random
 import sys
 import itertools
 from collections import deque
-import mission_control_breakout_ram as mc
+import mission_control_pacman_ram as mc
 import ops
 import matplotlib.pyplot as plt
 
@@ -24,7 +24,7 @@ episode_length = tf.placeholder(dtype=tf.float32, shape=[], name='episode_length
 max_action = tf.placeholder(dtype=tf.float32, shape=[], name='max_action')
 rand_prob = tf.placeholder(dtype=tf.float32, shape=[], name='rand_prob')
 
-epsilon_values = np.linspace(1, 0.1, 1e6)
+epsilon_values = np.linspace(1, 0.1, 5e5)
 
 
 def get_agent(x, reuse=False):
