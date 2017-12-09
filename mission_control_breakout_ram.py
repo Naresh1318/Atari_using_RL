@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Training
-learning_rate = 0.00025
+learning_rate = 0.00015
 batch_size = 32
 observation_time = int(1e6)  # 1e3
 rand_observation_time = int(5e4)  # 5e2
@@ -16,14 +16,15 @@ epsilon = 0.01
 
 ########################################################################################################################
 # Agent Model
-dense_1 = 400
-dense_2 = 180
-dense_3 = 100
+dense_1 = 512
+dense_2 = 512
+dense_3 = 256
 
 
 ########################################################################################################################
 # Control
-train_model = True
+train_model = False
+load_trained_model = True
 show_ui = True
 show_action = False
 

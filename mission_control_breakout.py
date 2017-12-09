@@ -28,8 +28,9 @@ dense_2 = 4
 
 ########################################################################################################################
 # Control
-train_model = True
-show_ui = False
+train_model = False
+load_trained_model = False
+show_ui = True
 show_action = False
 
 

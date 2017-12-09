@@ -13,7 +13,7 @@ import ops
 import matplotlib.pyplot as plt
 
 # Setup the environment
-env = gym.make('Breakout-v4')
+env = gym.make('BreakoutDeterministic-v4')
 
 # Placeholders
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
@@ -79,10 +79,12 @@ def anneal_epsilon(step):
     return epi
 
 
-def collect_rand_observations(replay_memory):
+def collect_rand_observations(replay_memory, sess=None, agent=None):
     """
     Collects mc.rand_observation_time number of random observations and stores them in deque
     :param replay_memory: deque, deque instance
+    :param agent: Tensor op, the agent architecture
+    :param sess: op, the restored session to restore
     :return: ndarray, stored as follows:
                       (state, action, reward, next_states, done, life_lost)
     """
@@ -95,7 +97,11 @@ def collect_rand_observations(replay_memory):
     lives_left = 5
     if len(replay_memory) < mc.rand_observation_time:
         for i in range(int(mc.rand_observation_time)):
-            action = env.action_space.sample()
+            if sess is None:
+                action = env.action_space.sample()
+            else:
+                q_prediction = sess.run(agent, feed_dict={X_input: state})
+                action = np.argmax(q_prediction)
             next_state, reward, done, info = env.step(action)
             next_state = ops.convert_to_gray_n_resize(next_state)
             next_state = np.expand_dims(next_state, axis=2)
@@ -161,7 +167,7 @@ def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
         while not done:
             if show_ui:
                 env.render()
-            if np.random.rand() < 0.1:
+            if np.random.rand() < 0.01:
                 action = env.action_space.sample()
             else:
                 action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
@@ -247,13 +253,23 @@ def train(train_model=True):
             # Get the initial epsilon
             prob_rand = mc.prob_random
 
+            # TODO: Change this ASAP
             # Add epsilon to Tensorboard
             tf.summary.scalar('epsilon', tensor=prob_rand)
             summary_op = tf.summary.merge_all()
 
-            # Replay memory
             replay_memory = deque()
-            replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
+
+            if mc.load_trained_model:
+                saved_models = os.listdir(mc.logdir)
+                latest_saved_model = sorted(saved_models)[-1]
+                saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
+                with open(mc.logdir+"saved_models/checkout", 'r') as checkout_file:
+                    line_1 = checkout_file.readline()
+                    step = int(line_1[30:-2])
+                replay_memory = collect_rand_observations(replay_memory, sess, agent)
+            else:
+                replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
 
             game_rewards = []
 
