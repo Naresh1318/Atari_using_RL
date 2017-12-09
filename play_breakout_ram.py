@@ -11,9 +11,11 @@ from collections import deque
 import mission_control_breakout_ram as mc
 import ops
 import matplotlib.pyplot as plt
+from gym.wrappers import Monitor
 
 # Setup the environment
 env = gym.make('Breakout-ram-v0')
+env = Monitor(env=env, directory="./Results/Videos/Breakout_ram", resume=True)
 
 # Placeholders
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 128, 4], name='Observations')
@@ -81,7 +83,7 @@ def anneal_epsilon(step):
     return epi
 
 
-def collect_rand_observations(replay_memory):
+def collect_rand_observations(replay_memory, sess=None, agent=None):
     """
     Collects mc.rand_observation_time number of random observations and stores them in deque
     :param replay_memory: deque, deque instance
@@ -96,7 +98,11 @@ def collect_rand_observations(replay_memory):
     lives_left = 5
     if len(replay_memory) < mc.rand_observation_time:
         for i in range(int(mc.rand_observation_time)):
-            action = env.action_space.sample()
+            if sess is None:
+                action = env.action_space.sample()
+            else:
+                q_prediction = sess.run(agent, feed_dict={X_input: state})
+                action = np.argmax(q_prediction)
             next_state, reward, done, info = env.step(action)
             next_state = np.expand_dims(next_state, axis=1)
             next_state = np.expand_dims(next_state, axis=0)
@@ -159,14 +165,14 @@ def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
         while not done:
             if show_ui:
                 env.render()
-            if np.random.rand() < 0.1:
+            if np.random.rand() < 0.01:
                 action = env.action_space.sample()
             else:
                 action = np.argmax(sess.run(agent, feed_dict={X_input: state}))
             if show_action:
                 print(action)
             new_state, r, done, _ = env.step(action)
-            next_state = np.expand_dims(next_state, axis=1)
+            next_state = np.expand_dims(new_state, axis=1)
             next_state = np.expand_dims(next_state, axis=0)
             state = np.append(next_state, state[:, :, :3], axis=2)
             reward += r
@@ -249,7 +255,21 @@ def train(train_model=True):
 
             # Replay memory
             replay_memory = deque()
-            replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
+
+            if mc.load_trained_model:
+                saved_models = os.listdir(mc.logdir)
+                latest_saved_model = sorted(saved_models)[-2]
+                os.rmdir(mc.logdir + sorted(saved_models)[-1])
+                tensorboard_dir = mc.logdir + latest_saved_model + "/Tensorboard/"
+                saved_model_dir = mc.logdir + latest_saved_model + "/saved_models/"
+                log_dir = mc.logdir + latest_saved_model + "/logs/"
+                saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
+                with open(mc.logdir+"saved_models/checkout", 'r') as checkout_file:
+                    line_1 = checkout_file.readline()
+                    step = int(line_1[30:-2])
+                replay_memory = collect_rand_observations(replay_memory, sess, agent)
+            else:
+                replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
 
             game_rewards = []
 
