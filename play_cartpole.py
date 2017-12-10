@@ -10,9 +10,11 @@ import mission_control_cart as mc
 import ops
 import sys
 import itertools
+from gym.wrappers import Monitor
 
 # Setup the environment
 env = gym.make('CartPole-v1')
+env = Monitor(env=env, directory="./Results/Videos/CartPole", resume=True)
 
 # Placeholders
 # TODO: make the shape of X_input generalized

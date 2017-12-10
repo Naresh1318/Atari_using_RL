@@ -11,9 +11,11 @@ from collections import deque
 import mission_control_breakout as mc
 import ops
 import matplotlib.pyplot as plt
+from gym.wrappers import Monitor
 
 # Setup the environment
 env = gym.make('BreakoutDeterministic-v4')
+env = Monitor(env=env, directory="./Results/Videos/Breakout", resume=True)
 
 # Placeholders
 X_input = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='Observations')
@@ -167,7 +169,7 @@ def play(sess, agent, no_plays, log_dir=None, show_ui=False, show_action=False):
         while not done:
             if show_ui:
                 env.render()
-            if np.random.rand() < 0.01:
+            if np.random.rand() < 0.05:
                 action = env.action_space.sample()
             else:
                 action = np.argmax(sess.run(agent, feed_dict={X_input: state}))

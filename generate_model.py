@@ -10,9 +10,11 @@ class predict_frame:
         self.input_frames = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 4], name='input_frames')
         self.target_frame = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 1], name='target_frame')
         self.action_performed = tf.placeholder(dtype=tf.int32, shape=[None, 4], name='action_performed')
+        self.n_epochs = 100
         self.learning_rate = 1e-4
         self.batch_size = 32
         self.momentum = 0.9
+        self.logdir = './Results/prediction_model'
 
     def model(self, x, action, reuse=False):
         if reuse:
@@ -65,6 +67,20 @@ class predict_frame:
         # TODO: Currently only shows latest input frame
         tf.summary.image(name='Input_images', tensor=self.input_frames[:, :, :, 0])
 
+        saver = tf.train.Saver()
+
+        init = tf.global_variables_initializer()
+
+        with tf.Session() as sess:
+            sess.run(init)
+
+            file_writer = tf.summary.FileWriter(logdir=self.logdir, graph=sess.graph)
+
+            # TODO: Train on 1 step prediction objective later extend
+            # for e in range(self.n_epochs):
+                # n_batches =
 
 
+    def get_next_batch(self):
+        pass
 

@@ -10,9 +10,11 @@ import mission_control_acrobat as mc
 import ops
 import sys
 import itertools
+from gym.wrappers import Monitor
 
 # Setup the environment
 env = gym.make('Acrobot-v1')
+env = Monitor(env=env, directory="./Results/Videos/Acrobat", resume=True)
 
 # Placeholders
 # TODO: make the shape of X_input generalized
