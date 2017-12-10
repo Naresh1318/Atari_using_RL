@@ -21,13 +21,14 @@ def dense(x, n1, n2, name):
         return output
 
 
-def cnn_2d(x, weight_shape, strides, name):
+def cnn_2d(x, weight_shape, strides, name, padding="VALID"):
     """
     A 2d Convolutional layer
     :param x: Tensor, input tensor
     :param weight_shape: Tensor, [filter_size, filter_size, n_input_features, n_output_features]
     :param strides: Tensor, [1, stride_x, stride_y, 1]
     :param name: String, Name of the layer on Tensorboard also prefixes this value for the variable name
+    :param padding: String, "VALID" or "SAME"
     :return: Tensor, output tensor after passing it through the convolutional layer
     """
     with tf.variable_scope(name):
@@ -35,7 +36,26 @@ def cnn_2d(x, weight_shape, strides, name):
                                   initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
         bias = tf.get_variable('bias', shape=[weight_shape[-1]], dtype=tf.float32,
                                initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
-        output = tf.nn.conv2d(x, filter=weights, strides=strides, padding="VALID", name="Output") + bias
+        output = tf.nn.conv2d(x, filter=weights, strides=strides, padding=padding, name="Output") + bias
+        return output
+
+
+def cnn_2d_trans(x, weight_shape, strides, output_shape, name):
+    """
+    Performs convolution transpose
+    :param x: Tensor, input tensor
+    :param weight_shape: Tensor, [filter_size, filter_size, n_input_features, n_output_features]
+    :param strides: Tensor, [1, stride_x, stride_y, 1]
+    :param output_shape: List, required output shape
+    :param name: String, Name of the layer on Tensorboard also prefixes this value for the variable name
+    :return: Tensor, output tensor after passing it through the convolutional transpose layer
+    """
+    with tf.variable_scope(name):
+        weights = tf.get_variable('weights', shape=weight_shape, dtype=tf.float32,
+                                  initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
+        bias = tf.get_variable('bias', shape=[weight_shape[-2]],
+                               initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
+        output = tf.nn.conv2d_transpose(x, weights, output_shape, strides=strides, padding="SAME") + bias
         return output
 
 
