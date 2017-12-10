@@ -232,17 +232,9 @@ def train(train_model=True):
         if train_model:
             print("Training agent!")
             print("Preparing required directories")
-            tensorboard_dir, saved_model_dir, log_dir = make_directories(mc.logdir)
-
-            print("Tensorboard files stores in: {}".format(tensorboard_dir))
-            print("Saved models stored in: {}".format(saved_model_dir))
-            print("Log files stores in: {}".format(log_dir))
 
             # Initialize global variables
             sess.run(init)
-
-            # File writer for tensorboard
-            writer = tf.summary.FileWriter(logdir=tensorboard_dir, graph=sess.graph)
 
             # Used to measure time taken
             t1 = time.time()
@@ -264,12 +256,26 @@ def train(train_model=True):
                 saved_models = os.listdir(mc.logdir)
                 latest_saved_model = sorted(saved_models)[-1]
                 saver.restore(sess, tf.train.latest_checkpoint(mc.logdir + latest_saved_model + "/saved_models/"))
-                with open(mc.logdir+"saved_models/checkout", 'r') as checkout_file:
+                with open(mc.logdir + latest_saved_model + "/saved_models/checkpoint", 'r') as checkout_file:
                     line_1 = checkout_file.readline()
                     step = int(line_1[30:-2])
+                tensorboard_dir = mc.logdir + latest_saved_model + "/Tensorboard/"
+                saved_model_dir = mc.logdir + latest_saved_model + "/saved_models/"
+                log_dir = mc.logdir + latest_saved_model + "/logs/"
+
                 replay_memory = collect_rand_observations(replay_memory, sess, agent)
             else:
                 replay_memory = collect_rand_observations(replay_memory)  # Get the initial 50k random observations
+
+            if not mc.load_trained_model:
+                tensorboard_dir, saved_model_dir, log_dir = make_directories(mc.logdir)
+
+            print("Tensorboard files stores in: {}".format(tensorboard_dir))
+            print("Saved models stored in: {}".format(saved_model_dir))
+            print("Log files stores in: {}".format(log_dir))
+
+            # File writer for tensorboard
+            writer = tf.summary.FileWriter(logdir=tensorboard_dir, graph=sess.graph)
 
             game_rewards = []
 
