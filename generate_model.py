@@ -20,7 +20,7 @@ class predict_frame:
         self.batch_size = 32
         self.momentum = 0.9
         self.logdir = './Results/prediction_model'
-        self.data_dir = './Dataset/Breakout'
+        self.data_dir = '../Dataset/Breakout'
         self.saver_path = './Prediction_model'
 
     def model(self, x, action, reuse=False):
