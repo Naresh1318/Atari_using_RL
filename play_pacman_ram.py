@@ -24,7 +24,7 @@ episode_length = tf.placeholder(dtype=tf.float32, shape=[], name='episode_length
 max_action = tf.placeholder(dtype=tf.float32, shape=[], name='max_action')
 rand_prob = tf.placeholder(dtype=tf.float32, shape=[], name='rand_prob')
 
-epsilon_values = np.linspace(1, 0.1, 5e5)
+epsilon_values = np.linspace(1, 0.1, 1e6)
 
 
 def get_agent(x, reuse=False):
