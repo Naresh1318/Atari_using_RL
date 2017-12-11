@@ -7,6 +7,7 @@ import os
 import sys
 from PIL import Image
 
+
 # TODO: Predicts only grayscale image for now
 
 
@@ -96,7 +97,7 @@ class predict_frame:
             train_input, train_action, train_target = self.training_data()
             input_size = len(train_action)
             for e in range(self.n_epochs):
-                n_batches = int(input_size/self.batch_size)
+                n_batches = int(input_size / self.batch_size)
                 for batch in range(n_batches):
                     batch_indx = np.random.permutation(input_size)[:self.batch_size]
                     batch_frame_input = train_input[batch_indx]
@@ -107,8 +108,8 @@ class predict_frame:
                     batch_target = train_target[batch_indx]
 
                     _, l = sess.run([optimizer, loss], feed_dict={self.input_frames: batch_frame_input,
-                                                   self.action_performed: batch_action_input,
-                                                   self.target_frame: batch_target})
+                                                                  self.action_performed: batch_action_input,
+                                                                  self.target_frame: batch_target})
 
                     if step % 1000 == 0:
                         s = sess.run(summary_op, feed_dict={self.input_frames: batch_frame_input,
@@ -122,9 +123,6 @@ class predict_frame:
                     step += 1
                 print("\n")
 
-
-
-
     def training_data(self):
         # TODO: Remove the first 5 to 10 frames from each episode?
         train_input = []
@@ -135,7 +133,7 @@ class predict_frame:
 
         for episode in episode_dir:
             frames = [f for f in os.listdir(episode) if f.endswith(".png")]
-            with open(episode_dir+"/action.txt") as action_file:
+            with open(episode_dir + "/action.txt") as action_file:
                 action_log = action_log.read()
 
             train_action.extend([int(a) for a in action_log.split("\n")])
@@ -143,7 +141,7 @@ class predict_frame:
             # TODO: Using this for grayscale images only
             for f_indx in range(len(frames)):
                 try:
-                    frames_to_use = frames[f_indx:f_indx+4]
+                    frames_to_use = frames[f_indx:f_indx + 4]
                     for i, f in enumerate(frames_to_use):
                         img = ops.convert_to_gray_n_resize(np.array(Image.open(self.data_dir + "/train/" + f)))
                         img = np.expand_dims(img, axis=2)
@@ -161,5 +159,6 @@ class predict_frame:
         train_target = np.array(train_target).reshape([-1, 84, 84, 1])
 
         return train_input, train_action, train_target
+
 
 model = predict_frame()
