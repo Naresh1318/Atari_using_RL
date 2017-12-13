@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.ndimage
 import tensorflow as tf
+from tensorflow.contrib.layers import batch_norm
 
 
 def dense(x, n1, n2, name):
@@ -80,3 +81,53 @@ def convert_reward(reward):
     """
     return np.sign(reward)
 
+
+def conv_block(x, filter_size, stride_length, n_maps, name):
+    """
+    CNN block with cnn, batch norm and lrelu repeated twice. The input Tensor's H and W is down-sampled only once.
+    :param x: Tensor, input tensor
+    :param filter_size: int or float, size of the square kernel to use
+    :param stride_length: int, stride length to be applied
+    :param n_maps: int, number of output maps
+    :param name: String, Name of the block on Tensorboard also prefixes this value for the variable name
+    :return: Tensor, output tensor after passing it through the convolutional block
+    """
+    with tf.variable_scope(name):
+        conv_1 = lrelu(batch_norm(cnn_2d(x, weight_shape=[filter_size, filter_size, x.get_shape()[-1], n_maps],
+                                         strides=[1, stride_length, stride_length, 1], name='conv_1'), center=True,
+                                  scale=True, is_training=True, scope='Batch_Norm_1'))
+        conv_2 = lrelu(batch_norm(cnn_2d(conv_1, weight_shape=[filter_size, filter_size, conv_1.get_shape()[-1], n_maps],
+                                         strides=[1, 1, 1, 1], name='conv_2'), center=True,
+                                  scale=True, is_training=True, scope='Batch_Norm_2'))
+        return conv_2
+
+
+def conv_t_block(x, filter_size, stride_length, n_maps, output_shape, name):
+    """
+    CNN block with cnn_trans, batch norm and lrelu repeated twice. The input Tensor's H and W is up-sampled only once.
+    :param x: Tensor, input tensor
+    :param filter_size: int or float, size of the square kernel to use
+    :param stride_length: int, stride length to be applied
+    :param n_maps: int, number of output maps
+    :param output_shape: String, Name of the block on Tensorboard also prefixes this value for the variable name
+    :param name:
+    :return: Tensor, output tensor after passing it through the convolutional transpose block
+    """
+    with tf.variable_scope(name):
+        conv_t_1 = lrelu(batch_norm(cnn_2d_trans(x, weight_shape=[filter_size, filter_size, n_maps, x.get_shape()[-1]],
+                                strides=[1, stride_length, stride_length, 1], output_shape=output_shape,
+                                name='conv_t_1'), center=True, scale=True, is_training=True, scope='Batch_Norm_1'))
+        conv_t_2 = lrelu(batch_norm(cnn_2d_trans(conv_t_1, weight_shape=[filter_size, filter_size, n_maps, conv_t_1.get_shape()[-1]],
+                                strides=[1, 1, 1, 1], output_shape=output_shape,
+                                name='conv_t_2'), center=True, scale=True, is_training=True, scope='Batch_Norm_2'))
+        return conv_t_2
+
+
+def lrelu(x, leak_slope=0.2):
+    """
+    leaky ReLU activation function
+    :param x: Tensor, Input tensor
+    :param leak_slope: float, slope for the negative part
+    :return: Tensor, after passing it through lrelu
+    """
+    return tf.maximum(x, x*leak_slope)
