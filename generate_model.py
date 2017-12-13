@@ -14,12 +14,12 @@ class Predict_frame:
         self.target_frame = tf.placeholder(dtype=tf.float32, shape=[None, 84, 84, 1], name='target_frame')
         self.action_performed = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='action_performed')
         self.n_epochs = 100
-        self.learning_rate = 1e-4
+        self.learning_rate = 1e-4  # TODO: Anneal the learning rate?
         self.batch_size = 32
         self.momentum = 0.9
         self.logdir = './Results/prediction_model'
         self.data_dir = '../Dataset/Breakout'
-        self.saver_path = './Prediction_model'
+        self.saver_path = './Results/prediction_model/Saved_models'
 
     def model(self, x, action, reuse=False):
         if reuse:
@@ -34,7 +34,7 @@ class Predict_frame:
         conv_3 = tf.nn.relu(ops.cnn_2d(conv_2, weight_shape=[6, 6, 64, 64], strides=[1, 2, 2, 1],
                                        name='conv_3', padding="SAME"))
         conv_3_flatten = tf.reshape(conv_3, shape=[-1, 6400], name='reshape_1')
-        dense_1 = ops.dense(conv_3_flatten, 6400, 1024, name='dense_1')
+        dense_1 = tf.nn.relu(ops.dense(conv_3_flatten, 6400, 1024, name='dense_1'))
         dense_2 = ops.dense(dense_1, 1024, 2048, name='dense_2')
         action_dense_1 = ops.dense(action, 4, 2048, name='action_dense_1')
         dense_2_action = tf.multiply(dense_2, action_dense_1, name='dense_2_action')
@@ -63,7 +63,9 @@ class Predict_frame:
         clipping_loss = tf.reduce_mean(tf.square(generated_image_clipped - generated_image))
 
         eps = 1e-5
-        l1_loss = tf.reduce_mean(tf.abs(self.target_frame - generated_image + eps))
+
+        target_frame = tf.divide(self.target_frame, 255.0)
+        l1_loss = tf.reduce_mean(tf.abs(target_frame - generated_image + eps))
 
         loss = 0.9 * l1_loss + 0.1 * clipping_loss
 
@@ -71,14 +73,15 @@ class Predict_frame:
 
         tf.summary.scalar(name='l1_loss', tensor=l1_loss)
         tf.summary.scalar(name='clipping_loss', tensor=clipping_loss)
+        tf.summary.scalar(name='Total_loss', tensor=loss)
         tf.summary.image(name='Generated_image', tensor=generated_image_clipped)
         tf.summary.image(name='Target_image', tensor=self.target_frame)
 
         # TODO: Currently only shows latest input frame
-        tf.summary.image(name='Input_frame_0', tensor=self.input_frames)
-        # tf.summary.image(name='Input_frame_1', tensor=self.input_frames)
-        # tf.summary.image(name='Input_frame_2', tensor=self.input_frames)
-        # tf.summary.image(name='Input_frame_3', tensor=self.input_frames)
+        tf.summary.image(name='Input_frame_0', tensor=tf.reshape(self.input_frames[:, :, :, 0], [-1, 84, 84, 1]))
+        tf.summary.image(name='Input_frame_1', tensor=tf.reshape(self.input_frames[:, :, :, 1], [-1, 84, 84, 1]))
+        tf.summary.image(name='Input_frame_2', tensor=tf.reshape(self.input_frames[:, :, :, 2], [-1, 84, 84, 1]))
+        tf.summary.image(name='Input_frame_3', tensor=tf.reshape(self.input_frames[:, :, :, 3], [-1, 84, 84, 1]))
 
         summary_op = tf.summary.merge_all()
 
@@ -91,7 +94,7 @@ class Predict_frame:
         with tf.Session() as sess:
             sess.run(init)
 
-            file_writer = tf.summary.FileWriter(logdir=self.logdir, graph=sess.graph)
+            file_writer = tf.summary.FileWriter(logdir=self.logdir + "/Tensorboard", graph=sess.graph)
 
             # TODO: Train on 1 step prediction objective later extend
             train_input, train_action, train_target = self.training_data()
@@ -109,18 +112,14 @@ class Predict_frame:
 
                     batch_target = train_target[batch_indx]
 
-                    _, batch_loss = sess.run([optimizer, loss], feed_dict={self.input_frames: batch_frame_input,
-                                                                           self.action_performed: batch_action_input,
-                                                                           self.target_frame: batch_target})
-
-                    if step % 1000 == 0:
-                        s = sess.run(summary_op, feed_dict={self.input_frames: batch_frame_input,
-                                                            self.action_performed: batch_action_input,
-                                                            self.target_frame: batch_target})
-                        file_writer.add_summary(s)
+                    _, s, batch_loss = sess.run([optimizer, summary_op, loss],
+                                                feed_dict={self.input_frames: batch_frame_input,
+                                                           self.action_performed: batch_action_input,
+                                                           self.target_frame: batch_target})
+                    file_writer.add_summary(s, global_step=step)
                     if step % 10000 == 0:
-                        saver.save(sess, save_path=self.saver_path)
-                    print("Epoch: {}/{} Batch: {}/{} Loss: {}".format(e, self.n_epochs, batch, n_batches, batch_loss),
+                        saver.save(sess, save_path=self.saver_path + "/model_{}".format(step))
+                    print("\rEpoch: {}/{} Batch: {}/{} Loss: {}".format(e, self.n_epochs, batch, n_batches, batch_loss),
                           end="")
                     sys.stdout.flush()
                     step += 1
@@ -132,17 +131,17 @@ class Predict_frame:
         train_action = []
         train_target = []
 
-        episode_dir = sorted([self.data_dir + "/train/" + p for p in os.listdir(self.data_dir + "/train/")])[:1]
+        episode_dir = sorted([self.data_dir + "/train/" + p for p in os.listdir(self.data_dir + "/train/")])[:5]
         n_episodes = len(episode_dir)
         print("Reading training images!")
         for e_i, episode in enumerate(episode_dir):
-            print("Reading training image from episode: {}/{}".format(e_i, n_episodes))
+            print("Reading training image from episode: {}/{}".format(e_i+1, n_episodes))
             frames = sorted([f for f in os.listdir(episode) if f.endswith(".png")])
             with open(episode + "/action.txt") as action_file:
                 action_log = action_file.read()
 
             train_action.extend(
-                [int(a) for i, a in enumerate(action_log.split("\n")[:-4]) if i != len(action_log.split("\n")) - 1])
+                [int(a) for i, a in enumerate(action_log.split("\n")[3:-1])])
 
             # TODO: Using this for grayscale images only
             for f_indx in range(len(frames)):
