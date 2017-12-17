@@ -131,7 +131,7 @@ class Predict_frame:
         train_action = []
         train_target = []
 
-        episode_dir = sorted([self.data_dir + "/train/" + p for p in os.listdir(self.data_dir + "/train/")])[:5]
+        episode_dir = sorted([self.data_dir + "/train/" + p for p in os.listdir(self.data_dir + "/train/")])
         n_episodes = len(episode_dir)
         print("Reading training images!")
         for e_i, episode in enumerate(episode_dir):

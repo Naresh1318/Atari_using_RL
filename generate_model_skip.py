@@ -164,9 +164,9 @@ class Predict_frame:
         g_vars = [var for var in t_vars if 'g_' in var.name]
 
         g_learning_rate = tf.train.exponential_decay(self.generator_lr, self.global_step,
-                                                     1, 0.999, staircase=True)
+                                                     1, 0.99999, staircase=True)
         d_learning_rate = tf.train.exponential_decay(self.discriminator_lr, self.global_step,
-                                                     1, 0.999, staircase=True)
+                                                     1, 0.99999, staircase=True)
 
         generator_optimizer = tf.train.AdamOptimizer(g_learning_rate, beta1=self.beta1).minimize(generator_loss,
                                                                                                  var_list=g_vars)
