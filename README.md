@@ -5,7 +5,7 @@
 </p>
 
 <br>
-The simplest implementation of playing Atari games using game screen as input. Also contains code to 
+The simplest implementation for playing Atari games using game screen as input. Also contains code to 
 implement visual foresight using adversarial action conditioned video prediction model (Still working on this).
 
 **Paper**: 
@@ -36,14 +36,14 @@ makes training faster** (I know some of my methods suck).
 </p>
 
 ## Training a DQN agent
-### Playing Cartpole using the game states as input
+### Playing Cartpole using the game states as input (Just a sanity check)
 
     python3 play_cartpole.py
 
 To change the hyperparameters modify `mission_control_cartpole.py`.
 
 <p align="center">
-<img src="ontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/CartPole.gif" alt="Cartpole agent">
+<img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/CartPole.gif" alt="Cartpole agent">
 </p>
 
 **Note:**
