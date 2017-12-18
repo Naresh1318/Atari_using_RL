@@ -1,8 +1,9 @@
 # Playing Atari the right way!
 
-<center>
+<p align="center">
 <img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Breakout_ram_good.gif" alt="Cover" style="width: 150px;"/>
-</center>
+</p>
+
 <br>
 The simplest implementation of playing Atari games using game screen as input. Also contains code to 
 implement visual foresight using adversarial action conditioned video prediction model (Still working on this).
