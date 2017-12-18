@@ -118,7 +118,7 @@ To change the hyperparameters modify `mission_control_breakout_ram.py`.
 
 #### Plot of the rewards obtained per episode during training
 <p align="center">
-<img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Breakout_ram_rewards.png" width="300px" alt="Breakout agent">
+<img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Breakout_ram_rewards.png" width="500px" alt="Breakout agent">
 </p>
 
 ***Note:***
