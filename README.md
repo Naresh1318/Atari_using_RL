@@ -1,7 +1,7 @@
 # Playing Atari the right way!
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Breakout_ram_good.gif" alt="Cover" style="width: 150px;"/>
+<img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Breakout_ram_good.gif" alt="Cover" width="300px"/>
 </p>
 
 <br>
@@ -31,9 +31,9 @@ makes training faster** (I know some of my methods suck).
 
 ## Architecture graph from Tensorboard
 
-<center>
+<p align="center">
 <img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Architectur.jpg" alt="Cartpole agent">
-</center>
+</p>
 
 ## Training a DQN agent
 ### Playing Cartpole using the game states as input
@@ -42,9 +42,9 @@ makes training faster** (I know some of my methods suck).
 
 To change the hyperparameters modify `mission_control_cartpole.py`.
 
-<center>
+<p align="center">
 <img src="ontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/CartPole.gif" alt="Cartpole agent">
-</center>
+</p>
 
 **Note:**
 * This isn't as computationally demanding as Breakout using frames.
@@ -55,31 +55,31 @@ To change the hyperparameters modify `mission_control_cartpole.py`.
 
 To change the hyperparameters modify `mission_control_breakout.py`.
 
-<center>
-<img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Breakout_ram_good.gif" alt="Breakout agent">
-</center>
+<p align="center">
+<img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Breakout_ram_good.gif" width="300px" alt="Breakout agent">
+</p>
 
 
 ## Results from training Breakout agent
 
 ### Plot of the rewards obtained per episode during training
 
-<center>
+<p align="center">
 <img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Breakout_rewards.png" alt="Breakout Reward" width="500px">
-</center>
+</p>
 
 ### Q-value histogram after each episode
 
-<center>
+<p align="center">
 <img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/q_val_hist.jpg" alt="Breakout histo">
-</center>
+</p>
 
 
 ### Max Q-values after each episode
 
-<center>
+<p align="center">
 <img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/max_q_value.jpg" alt="Breakout max Q">
-</center>
+</p>
 
 ## Use the trained model to generate dataset
 
@@ -101,9 +101,9 @@ To change the hyperparameters modify `mission_control_breakout.py`.
 
 ## Results from action conditioned video prediction model
 
-<center>
+<p align="center">
 <img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/skip.jpg" alt="Breakout agent">
-</center>
+</p>
 <br>
 
 ***Note:***
