@@ -59,6 +59,10 @@ To change the hyperparameters modify `mission_control_breakout.py`.
 <img src="https://raw.githubusercontent.com/Naresh1318/Playing_Atari_the_right_way/master/README/Breakout_ram_good.gif" width="300px" alt="Breakout agent">
 </p>
 
+**Note:**
+* I have included the trained model for Breakout after 14 million episodes. Just explore the Results director for Breakout.
+* Change `train_model` to `False` and `show_ui` to `True` to load the saved model and see the agent in action.
+
 
 ## Results from training Breakout agent
 
